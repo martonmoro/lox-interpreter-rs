@@ -9,21 +9,18 @@ use std::process::exit;
 
 use scanner::Scanner;
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
     let args: Vec<String> = env::args().collect();
 
     match &args[..] {
-        [_, file_path] => {
-            run_file(file_path);
-        }
-        [_] => {
-            run_prompt();
-        }
+        [_, file_path] => run_file(file_path)?,
+        [_] => run_prompt()?,
         _ => {
             eprintln!("Usage: jlox [script]");
             exit(64);
         }
     }
+    Ok(())
 }
 
 fn run_file(file_path: &String) -> io::Result<()> {
@@ -41,7 +38,7 @@ fn run_prompt() -> io::Result<()> {
     let handle = stdin.lock();
 
     for line in handle.lines() {
-        run(line?);
+        run(line?)?;
         print!("> ");
     }
 

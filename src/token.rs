@@ -73,6 +73,10 @@ impl Token {
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!("Implement when I have literals figured out")
+        match &self.token_type {
+            TokenType::String { literal } => write!(f, "String {:?} {:?}", self.lexeme, literal),
+            TokenType::Number { literal } => write!(f, "Number {:?} {:?}", self.lexeme, literal),
+            _ => write!(f, "{:?} {:?}", self.token_type, self.lexeme),
+        }
     }
 }

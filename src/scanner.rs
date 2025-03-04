@@ -102,7 +102,7 @@ impl Scanner {
             c => {
                 if c.is_digit(10) {
                     self.number()
-                } else if c.is_alphabetic() {
+                } else if c.is_alphabetic() || c == '_' {
                     self.identifier()
                 } else {
                     error(self.line, "Unexpected character.")
@@ -149,16 +149,16 @@ impl Scanner {
             while self.peek().is_digit(10) {
                 self.advance();
             }
-
-            let literal: f64 = self
-                .source
-                .get(self.start..self.current)
-                .expect("Unexpected number end")
-                .parse() // we could do .parse::<64> using the turbofish
-                .expect("Scanned number could not be parsed");
-
-            self.add_token(TokenType::Number { literal });
         }
+
+        let literal: f64 = self
+            .source
+            .get(self.start..self.current)
+            .expect("Unexpected number end")
+            .parse() // we could do .parse::<64> using the turbofish
+            .expect("Scanned number could not be parsed");
+
+        self.add_token(TokenType::Number { literal });
     }
 
     fn identifier(&mut self) {
