@@ -4,3 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+phf = { version = "0.11.3", default-features = false }
+
+[build-dependencies]
+phf_codegen = "0.11.3"
