@@ -27,6 +27,9 @@ pub trait Visitor<R> {
 }
 
 impl Expr {
+    // we could have used an opaque type pub fn accept<R>(&self, visitor: &impl Visitor<R>) -> R
+    // or dynamic dispatch pub fn accept<R>(&self, visitor: &dyn Visitor<R>) -> R
+    // instead of the trait bound
     pub fn accept<R, T: Visitor<R>>(&self, visitor: &T) -> R {
         match self {
             Expr::Binary {
