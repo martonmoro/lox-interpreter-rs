@@ -56,7 +56,7 @@ include!(concat!(env!("OUT_DIR"), "/keywords.rs"));
 
 pub struct Token {
     token_type: TokenType,
-    lexeme: String,
+    pub lexeme: String,
     line: i32,
     // in the original code it has the literals here but we can encode them in enums so we don't have to store the separately
 }
