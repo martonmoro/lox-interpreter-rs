@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
@@ -54,10 +54,11 @@ pub enum TokenType {
 // we are building the hashmap at compile time
 include!(concat!(env!("OUT_DIR"), "/keywords.rs"));
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token {
-    token_type: TokenType,
+    pub token_type: TokenType,
     pub lexeme: String,
-    line: i32,
+    pub line: i32,
     // in the original code it has the literals here but we can encode them in enums so we don't have to store the separately
 }
 

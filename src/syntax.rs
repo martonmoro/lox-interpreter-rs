@@ -1,6 +1,9 @@
+use std::fmt;
+
 use crate::token::Token;
 
 // we don't really need to generate these like they are generated using a script in the book
+#[derive(Debug)]
 pub enum Expr {
     Binary {
         left: Box<Expr>,
@@ -15,8 +18,27 @@ pub enum Expr {
         expression: Box<Expr>,
     },
     Literal {
-        value: String,
+        value: LiteralValue,
     },
+}
+
+#[derive(Debug)]
+pub enum LiteralValue {
+    Boolean(bool),
+    Number(f64),
+    Null,
+    String(String),
+}
+
+impl fmt::Display for LiteralValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LiteralValue::Boolean(b) => write!(f, "{}", b),
+            LiteralValue::Null => write!(f, "null"),
+            LiteralValue::Number(n) => write!(f, "{}", n),
+            LiteralValue::String(s) => write!(f, "{}", s),
+        }
+    }
 }
 
 pub trait Visitor<R> {
@@ -44,10 +66,10 @@ impl Expr {
     }
 }
 
-struct AstPrinter;
+pub struct AstPrinter;
 
 impl AstPrinter {
-    fn print(&self, expr: Expr) -> String {
+    pub fn print(&self, expr: Expr) -> String {
         expr.accept(self)
     }
 
@@ -98,13 +120,13 @@ mod tests {
             left: Box::new(Expr::Unary {
                 operator: Token::new(TokenType::Minus, "-", 1),
                 right: Box::new(Expr::Literal {
-                    value: "123".to_string(),
+                    value: LiteralValue::Number(123f64),
                 }),
             }),
             operator: Token::new(TokenType::Star, "*", 1),
             right: Box::new(Expr::Grouping {
                 expression: Box::new(Expr::Literal {
-                    value: "45.67".to_string(),
+                    value: LiteralValue::Number(45.67),
                 }),
             }),
         };
