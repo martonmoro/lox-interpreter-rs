@@ -1,29 +1,7 @@
 use crate::error::Error;
+use crate::object::Object;
 use crate::syntax::{Expr, LiteralValue, Visitor};
 use crate::token::{Token, TokenType};
-
-// The book is using java.lang.Object
-enum Object {
-    Boolean(bool),
-    Null,
-    Number(f64),
-    String(String),
-}
-
-impl Object {
-    fn equals(&self, other: &Object) -> bool {
-        match (self, other) {
-            (Object::Null, Object::Null) => true,
-            (_, Object::Null) => false,
-            (Object::Null, _) => false,
-            (Object::Boolean(left), Object::Boolean(right)) => left == right,
-            (Object::Number(left), Object::Number(right)) => left == right,
-            (Object::String(left), Object::String(right)) => left.eq(right),
-            _ => false,
-        }
-    }
-}
-
 pub struct Interpreter {}
 
 impl Interpreter {
