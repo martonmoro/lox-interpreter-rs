@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::error::Error;
 use crate::token::Token;
 
 // we don't really need to generate these like they are generated using a script in the book
@@ -42,17 +43,17 @@ impl fmt::Display for LiteralValue {
 }
 
 pub trait Visitor<R> {
-    fn visit_binary_expr(&self, left: &Expr, operator: &Token, right: &Expr) -> R;
-    fn visit_grouping_expr(&self, expression: &Expr) -> R;
-    fn visit_literal_expr(&self, value: String) -> R;
-    fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> R;
+    fn visit_binary_expr(&self, left: &Expr, operator: &Token, right: &Expr) -> Result<R, Error>;
+    fn visit_grouping_expr(&self, expression: &Expr) -> Result<R, Error>;
+    fn visit_literal_expr(&self, value: &LiteralValue) -> Result<R, Error>;
+    fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> Result<R, Error>;
 }
 
 impl Expr {
     // we could have used an opaque type pub fn accept<R>(&self, visitor: &impl Visitor<R>) -> R
     // or dynamic dispatch pub fn accept<R>(&self, visitor: &dyn Visitor<R>) -> R
     // instead of the trait bound
-    pub fn accept<R, T: Visitor<R>>(&self, visitor: &T) -> R {
+    pub fn accept<R, T: Visitor<R>>(&self, visitor: &T) -> Result<R, Error> {
         match self {
             Expr::Binary {
                 left,
@@ -60,7 +61,7 @@ impl Expr {
                 right,
             } => visitor.visit_binary_expr(left, operator, right),
             Expr::Grouping { expression } => visitor.visit_grouping_expr(expression),
-            Expr::Literal { value } => visitor.visit_literal_expr(value.to_string()),
+            Expr::Literal { value } => visitor.visit_literal_expr(value),
             Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, right),
         }
     }
@@ -69,11 +70,11 @@ impl Expr {
 pub struct AstPrinter;
 
 impl AstPrinter {
-    pub fn print(&self, expr: Expr) -> String {
+    pub fn print(&self, expr: Expr) -> Result<String, Error> {
         expr.accept(self)
     }
 
-    fn paranthesize(&self, name: String, exprs: Vec<&Expr>) -> String {
+    fn paranthesize(&self, name: String, exprs: Vec<&Expr>) -> Result<String, Error> {
         let mut builder = String::new();
 
         builder.push_str("(");
@@ -81,29 +82,34 @@ impl AstPrinter {
 
         for expr in exprs {
             builder.push_str(" ");
-            builder.push_str(&expr.accept(self));
+            builder.push_str(&expr.accept(self)?);
         }
 
         builder.push_str(")");
 
-        builder
+        Ok(builder)
     }
 }
 
 impl Visitor<String> for AstPrinter {
-    fn visit_binary_expr(&self, left: &Expr, operator: &Token, right: &Expr) -> String {
+    fn visit_binary_expr(
+        &self,
+        left: &Expr,
+        operator: &Token,
+        right: &Expr,
+    ) -> Result<String, Error> {
         self.paranthesize(operator.lexeme.clone(), vec![left, right])
     }
 
-    fn visit_grouping_expr(&self, expression: &Expr) -> String {
+    fn visit_grouping_expr(&self, expression: &Expr) -> Result<String, Error> {
         self.paranthesize("group".to_string(), vec![expression])
     }
 
-    fn visit_literal_expr(&self, value: String) -> String {
-        value
+    fn visit_literal_expr(&self, value: &LiteralValue) -> Result<String, Error> {
+        Ok(value.to_string())
     }
 
-    fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> String {
+    fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> Result<String, Error> {
         self.paranthesize(operator.lexeme.clone(), vec![right])
     }
 }
@@ -132,6 +138,9 @@ mod tests {
         };
         let printer = AstPrinter;
 
-        assert_eq!(printer.print(expression), "(* (- 123) (group 45.67))");
+        assert_eq!(
+            printer.print(expression).unwrap(),
+            "(* (- 123) (group 45.67))"
+        );
     }
 }
