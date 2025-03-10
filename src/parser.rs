@@ -34,16 +34,7 @@ impl<'t> Parser<'t> {
         Ok(statements)
     }
 
-    // statement      → exprStmt | printStmt ;
-    fn statement(&mut self) -> Result<Stmt, Error> {
-        if matches!(self, TokenType::Print) {
-            return self.print_statement();
-        }
-
-        self.expression_statement()
-    }
-
-    // varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
+    // declaration    → varDecl | statement ;
     fn declaration(&mut self) -> Result<Stmt, Error> {
         let statement = if matches!(self, TokenType::Var) {
             self.var_declaration()
@@ -61,6 +52,32 @@ impl<'t> Parser<'t> {
         }
     }
 
+    // statement      → exprStmt | printStmt | block ;
+    fn statement(&mut self) -> Result<Stmt, Error> {
+        if matches!(self, TokenType::Print) {
+            self.print_statement()
+        } else if matches!(self, TokenType::LeftBrace) {
+            Ok(Stmt::Block {
+                statements: self.block()?,
+            })
+        } else {
+            self.expression_statement()
+        }
+    }
+
+    // block          → "{" declaration* "}" ;
+    fn block(&mut self) -> Result<Vec<Stmt>, Error> {
+        let mut statements: Vec<Stmt> = Vec::new();
+
+        while !self.check(TokenType::RightBrace) && !self.is_at_end() {
+            statements.push(self.declaration()?);
+        }
+
+        self.consume(TokenType::RightBrace, "Expect '}' after block.")?;
+        Ok(statements)
+    }
+
+    // varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
     fn var_declaration(&mut self) -> Result<Stmt, Error> {
         let name = self.consume(TokenType::Identifier, "Expected variable name.")?;
         let initializer = if matches!(self, TokenType::Equal) {

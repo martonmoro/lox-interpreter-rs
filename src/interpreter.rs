@@ -18,16 +18,40 @@ impl Interpreter {
         }
     }
 
-    pub fn interpret(&self, statements: &Vec<Stmt>) -> Result<(), Error> {
+    pub fn interpret(&mut self, statements: &Vec<Stmt>) -> Result<(), Error> {
         for statement in statements {
             self.execute(statement)?;
         }
         Ok(())
     }
 
-    fn execute(&self, stmt: &Stmt) -> Result<(), Error> {
+    fn execute(&mut self, stmt: &Stmt) -> Result<(), Error> {
         stmt.accept(self)
     }
+
+    /*
+    Another classic approach is to explicitly pass the environment as a parameter to each visit method.
+    To “change” the environment, you pass a different one as you recurse down the tree.
+    You don’t have to restore the old one, since the new one lives on the Java stack and is implicitly discarded when the interpreter returns from the block’s visit method.
+     */
+    fn execute_block(
+        &mut self,
+        statements: &Vec<Stmt>,
+        environment: Rc<RefCell<Environment>>,
+    ) -> Result<(), Error> {
+        let previous = self.environment.clone();
+
+        self.environment = environment;
+
+        let result = statements
+            .iter()
+            .try_for_each(|statement| self.execute(statement));
+
+        self.environment = previous;
+
+        result
+    }
+
     // simply call interpreters visitor implementation
     fn evaluate(&self, expr: &Expr) -> Result<Object, Error> {
         expr.accept(self)
@@ -208,6 +232,14 @@ impl stmt::Visitor<()> for Interpreter {
             .borrow_mut()
             .define(name.lexeme.clone(), value);
 
+        Ok(())
+    }
+
+    fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<(), Error> {
+        self.execute_block(
+            statements,
+            Rc::new(RefCell::new(Environment::from(&self.environment))),
+        );
         Ok(())
     }
 }

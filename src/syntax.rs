@@ -97,6 +97,9 @@ pub mod expr {
 }
 #[derive(Debug)]
 pub enum Stmt {
+    Block {
+        statements: Vec<Stmt>,
+    },
     Expression {
         expression: Expr,
     },
@@ -111,11 +114,12 @@ pub enum Stmt {
 }
 
 impl Stmt {
-    pub fn accept<R, T: stmt::Visitor<R>>(&self, visitor: &T) -> Result<R, Error> {
+    pub fn accept<R, T: stmt::Visitor<R>>(&self, visitor: &mut T) -> Result<R, Error> {
         match self {
             Stmt::Expression { expression } => visitor.visit_expression_stmt(expression),
             Stmt::Print { expression } => visitor.visit_print_stmt(expression),
             Stmt::Var { name, initializer } => visitor.visit_var_stmt(name, initializer),
+            Stmt::Block { statements } => visitor.visit_block_stmt(statements),
             Stmt::Null => unimplemented!(),
         }
     }
@@ -131,6 +135,7 @@ pub mod stmt {
         fn visit_expression_stmt(&self, stmt: &Expr) -> Result<R, Error>;
         fn visit_print_stmt(&self, stmt: &Expr) -> Result<R, Error>;
         fn visit_var_stmt(&self, name: &Token, initializer: &Option<Expr>) -> Result<R, Error>;
+        fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<R, Error>;
     }
 }
 

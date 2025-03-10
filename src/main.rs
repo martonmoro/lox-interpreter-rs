@@ -28,7 +28,7 @@ impl Lox {
         }
     }
 
-    fn run_file(&self, file_path: &String) -> Result<(), Error> {
+    fn run_file(&mut self, file_path: &String) -> Result<(), Error> {
         let mut file = File::open(file_path)?;
         let mut contents = String::new();
 
@@ -37,7 +37,7 @@ impl Lox {
         self.run(contents)
     }
 
-    fn run_prompt(&self) -> Result<(), Error> {
+    fn run_prompt(&mut self) -> Result<(), Error> {
         let stdin = io::stdin();
 
         let handle = stdin.lock();
@@ -50,14 +50,14 @@ impl Lox {
         Ok(())
     }
 
-    fn run(&self, source: String) -> Result<(), Error> {
+    fn run(&mut self, source: String) -> Result<(), Error> {
         let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens();
 
         let mut parser = Parser::new(tokens);
-        let statements = parser.parse()?;
+        let mut statements = parser.parse()?;
 
-        self.interpreter.interpret(&statements)?;
+        self.interpreter.interpret(&mut statements)?;
 
         Ok(())
     }
@@ -65,7 +65,7 @@ impl Lox {
 
 fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
     let args: Vec<String> = env::args().collect();
-    let lox = Lox::new();
+    let mut lox = Lox::new();
     match &args[..] {
         [_, file_path] => match lox.run_file(file_path) {
             Ok(_) => (),
