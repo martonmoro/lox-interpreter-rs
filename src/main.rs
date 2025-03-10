@@ -1,3 +1,4 @@
+mod environment;
 mod error;
 mod interpreter;
 mod object;
@@ -23,7 +24,7 @@ struct Lox {
 impl Lox {
     fn new() -> Self {
         Lox {
-            interpreter: Interpreter {},
+            interpreter: Interpreter::new(),
         }
     }
 
@@ -55,6 +56,7 @@ impl Lox {
 
         let mut parser = Parser::new(tokens);
         let statements = parser.parse()?;
+
         self.interpreter.interpret(&statements)?;
 
         Ok(())

@@ -21,6 +21,19 @@ pub enum Expr {
     Literal {
         value: LiteralValue,
     },
+    Variable {
+        name: Token,
+    },
+    Assign {
+        name: Token,
+        value: Box<Expr>,
+    },
+}
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Debug)]
@@ -56,6 +69,8 @@ impl Expr {
             Expr::Grouping { expression } => visitor.visit_grouping_expr(expression),
             Expr::Literal { value } => visitor.visit_literal_expr(value),
             Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, right),
+            Expr::Variable { name } => visitor.visit_variable_expr(name),
+            Expr::Assign { name, value } => visitor.visit_assign_expr(name, value),
         }
     }
 }
@@ -76,12 +91,23 @@ pub mod expr {
         fn visit_grouping_expr(&self, expression: &Expr) -> Result<R, Error>;
         fn visit_literal_expr(&self, value: &LiteralValue) -> Result<R, Error>;
         fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> Result<R, Error>;
+        fn visit_variable_expr(&self, name: &Token) -> Result<R, Error>;
+        fn visit_assign_expr(&self, name: &Token, value: &Expr) -> Result<R, Error>;
     }
 }
-
+#[derive(Debug)]
 pub enum Stmt {
-    Expression { expression: Expr },
-    Print { expression: Expr },
+    Expression {
+        expression: Expr,
+    },
+    Print {
+        expression: Expr,
+    },
+    Var {
+        name: Token,
+        initializer: Option<Expr>,
+    },
+    Null, // placeholder until statement handling is figured out after synchronize()
 }
 
 impl Stmt {
@@ -89,18 +115,22 @@ impl Stmt {
         match self {
             Stmt::Expression { expression } => visitor.visit_expression_stmt(expression),
             Stmt::Print { expression } => visitor.visit_print_stmt(expression),
+            Stmt::Var { name, initializer } => visitor.visit_var_stmt(name, initializer),
+            Stmt::Null => unimplemented!(),
         }
     }
 }
 
 pub mod stmt {
     use crate::error::Error;
+    use crate::token::Token;
 
     use super::{Expr, Stmt};
 
     pub trait Visitor<R> {
         fn visit_expression_stmt(&self, stmt: &Expr) -> Result<R, Error>;
         fn visit_print_stmt(&self, stmt: &Expr) -> Result<R, Error>;
+        fn visit_var_stmt(&self, name: &Token, initializer: &Option<Expr>) -> Result<R, Error>;
     }
 }
 
@@ -148,6 +178,10 @@ impl expr::Visitor<String> for AstPrinter {
 
     fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> Result<String, Error> {
         self.paranthesize(operator.lexeme.clone(), vec![right])
+    }
+
+    fn visit_variable_expr(&self, name: &Token) -> Result<String, Error> {
+        Ok(name.lexeme.clone())
     }
 }
 

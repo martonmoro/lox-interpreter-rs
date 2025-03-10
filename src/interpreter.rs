@@ -1,11 +1,23 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use crate::environment::Environment;
 use crate::error::Error;
 use crate::object::Object;
 use crate::syntax::{expr, stmt, Stmt};
 use crate::syntax::{Expr, LiteralValue};
 use crate::token::{Token, TokenType};
-pub struct Interpreter {}
+pub struct Interpreter {
+    environment: Rc<RefCell<Environment>>,
+}
 
 impl Interpreter {
+    pub fn new() -> Self {
+        Self {
+            environment: Rc::new(RefCell::new(Environment::new())),
+        }
+    }
+
     pub fn interpret(&self, statements: &Vec<Stmt>) -> Result<(), Error> {
         for statement in statements {
             self.execute(statement)?;
@@ -148,6 +160,10 @@ impl expr::Visitor<Object> for Interpreter {
             _ => unreachable!(),
         }
     }
+
+    fn visit_variable_expr(&self, name: &Token) -> Result<Object, Error> {
+        self.environment.borrow().get(name)
+    }
 }
 
 impl stmt::Visitor<()> for Interpreter {
@@ -158,6 +174,34 @@ impl stmt::Visitor<()> for Interpreter {
     fn visit_print_stmt(&self, expression: &Expr) -> Result<(), Error> {
         let value = self.evaluate(expression)?;
         println!("{}", self.stringify(value));
+        Ok(())
+    }
+    // if we strictly wanted to follow the book we could do
+    // fn visit_var_stmt(&self, name: &Token, initializer: &Option<Expr>) -> Result<(), Error> {
+    //     let value = if let Some(initializer) = initializer {
+    //         self.evaluate(initializer)?
+    //     } else {
+    //         Object::Null
+    //     };
+
+    //     self.environment
+    //         .borrow_mut()
+    //         .define(name.lexeme.clone(), value);
+
+    //     Ok(())
+    // }
+
+    // if we want to do more functional style
+    fn visit_var_stmt(&self, name: &Token, initializer: &Option<Expr>) -> Result<(), Error> {
+        let value = initializer
+            .as_ref() // we want to borrow the Expr
+            .map(|i| self.evaluate(i)) // if it was a some call self.evaluate and wrap the result in a Some, if None leave it as None
+            .unwrap_or(Ok(Object::Null))?; // unwrap result or return Ok(Object::Null)
+
+        self.environment
+            .borrow_mut()
+            .define(name.lexeme.clone(), value);
+
         Ok(())
     }
 }

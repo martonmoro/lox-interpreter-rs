@@ -25,13 +25,56 @@ impl<'t> Parser<'t> {
     pub fn new(tokens: &'t Vec<Token>) -> Self {
         Self { tokens, current: 0 }
     }
-
+    // program        → declaration* EOF ;
     pub fn parse(&mut self) -> Result<Vec<Stmt>, Error> {
         let mut statements: Vec<Stmt> = Vec::new();
         while !self.is_at_end() {
-            statements.push(self.statement()?);
+            statements.push(self.declaration()?);
         }
         Ok(statements)
+    }
+
+    // statement      → exprStmt | printStmt ;
+    fn statement(&mut self) -> Result<Stmt, Error> {
+        if matches!(self, TokenType::Print) {
+            return self.print_statement();
+        }
+
+        self.expression_statement()
+    }
+
+    // varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
+    fn declaration(&mut self) -> Result<Stmt, Error> {
+        let statement = if matches!(self, TokenType::Var) {
+            self.var_declaration()
+        } else {
+            self.statement()
+        };
+
+        // catch the "exception thrown" when the parser begins error recovery
+        match statement {
+            Err(Error::Parse) => {
+                self.synchronize();
+                Ok(Stmt::Null)
+            }
+            other => other,
+        }
+    }
+
+    fn var_declaration(&mut self) -> Result<Stmt, Error> {
+        let name = self.consume(TokenType::Identifier, "Expected variable name.")?;
+        let initializer = if matches!(self, TokenType::Equal) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(
+            TokenType::Semicolon,
+            "Expected ; after variable declaration.",
+        )?;
+
+        Ok(Stmt::Var { name, initializer })
     }
 
     // expression     → equality ;
@@ -138,7 +181,7 @@ impl<'t> Parser<'t> {
         self.primary()
     }
 
-    // primary        → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+    // primary        → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
     fn primary(&mut self) -> Result<Expr, Error> {
         let expr = match &self.peek().token_type {
             TokenType::False => Expr::Literal {
@@ -163,6 +206,9 @@ impl<'t> Parser<'t> {
                     expression: Box::new(expr),
                 }
             }
+            TokenType::Identifier => Expr::Variable {
+                name: self.peek().clone(),
+            },
             _ => return Err(self.error(self.peek(), "Expect expression")),
         };
 
@@ -171,27 +217,20 @@ impl<'t> Parser<'t> {
         Ok(expr)
     }
 
-    fn statement(&mut self) -> Result<Stmt, Error> {
-        if matches!(self, TokenType::Print) {
-            return self.print_statement();
-        }
-
-        self.expression_statement()
-    }
-
+    // printStmt      → "print" expression ";" ;
     fn print_statement(&mut self) -> Result<Stmt, Error> {
         let value = self.expression()?;
         self.consume(TokenType::Semicolon, "Expected ; after value.")?;
         Ok(Stmt::Print { expression: value })
     }
 
+    // exprStmt       → expression ";" ;
     fn expression_statement(&mut self) -> Result<Stmt, Error> {
         let value = self.expression()?;
         self.consume(TokenType::Semicolon, "Expected ; after value.")?;
         Ok(Stmt::Expression { expression: value })
     }
 
-    // TODO: not yet used but prepared for synchronization after panic mode
     fn synchronize(&mut self) {
         self.advance();
 
