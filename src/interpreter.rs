@@ -1,12 +1,20 @@
 use crate::error::Error;
 use crate::object::Object;
-use crate::syntax::{Expr, LiteralValue, Visitor};
+use crate::syntax::{expr, stmt, Stmt};
+use crate::syntax::{Expr, LiteralValue};
 use crate::token::{Token, TokenType};
 pub struct Interpreter {}
 
 impl Interpreter {
-    pub fn interpret(&self, expression: &Expr) -> Result<String, Error> {
-        self.evaluate(expression).map(|value| self.stringify(value))
+    pub fn interpret(&self, statements: &Vec<Stmt>) -> Result<(), Error> {
+        for statement in statements {
+            self.execute(statement)?;
+        }
+        Ok(())
+    }
+
+    fn execute(&self, stmt: &Stmt) -> Result<(), Error> {
+        stmt.accept(self)
     }
     // simply call interpreters visitor implementation
     fn evaluate(&self, expr: &Expr) -> Result<Object, Error> {
@@ -43,7 +51,7 @@ impl Interpreter {
     }
 }
 
-impl Visitor<Object> for Interpreter {
+impl expr::Visitor<Object> for Interpreter {
     fn visit_literal_expr(&self, value: &LiteralValue) -> Result<Object, Error> {
         // they implement copy
         match value {
@@ -139,5 +147,17 @@ impl Visitor<Object> for Interpreter {
             TokenType::EqualEqual => Ok(Object::Boolean(self.is_equal(&l, &r))),
             _ => unreachable!(),
         }
+    }
+}
+
+impl stmt::Visitor<()> for Interpreter {
+    fn visit_expression_stmt(&self, expression: &Expr) -> Result<(), Error> {
+        self.evaluate(expression)?;
+        Ok(())
+    }
+    fn visit_print_stmt(&self, expression: &Expr) -> Result<(), Error> {
+        let value = self.evaluate(expression)?;
+        println!("{}", self.stringify(value));
+        Ok(())
     }
 }

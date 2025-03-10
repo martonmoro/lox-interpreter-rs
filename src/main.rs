@@ -51,14 +51,11 @@ impl Lox {
 
     fn run(&self, source: String) -> Result<(), Error> {
         let mut scanner = Scanner::new(source);
-
         let tokens = scanner.scan_tokens();
 
         let mut parser = Parser::new(tokens);
-
-        if let Some(expr) = parser.parse() {
-            println!("{}", self.interpreter.interpret(&expr)?);
-        }
+        let statements = parser.parse()?;
+        self.interpreter.interpret(&statements)?;
 
         Ok(())
     }

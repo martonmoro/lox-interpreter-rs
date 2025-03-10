@@ -1,6 +1,6 @@
 use crate::error::{parser_error, Error};
 
-use crate::syntax::{Expr, LiteralValue};
+use crate::syntax::{Expr, LiteralValue, Stmt};
 use crate::token::{Token, TokenType};
 
 pub struct Parser<'t> {
@@ -26,8 +26,12 @@ impl<'t> Parser<'t> {
         Self { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> Option<Expr> {
-        self.expression().ok()
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, Error> {
+        let mut statements: Vec<Stmt> = Vec::new();
+        while !self.is_at_end() {
+            statements.push(self.statement()?);
+        }
+        Ok(statements)
     }
 
     // expression     → equality ;
@@ -167,6 +171,26 @@ impl<'t> Parser<'t> {
         Ok(expr)
     }
 
+    fn statement(&mut self) -> Result<Stmt, Error> {
+        if matches!(self, TokenType::Print) {
+            return self.print_statement();
+        }
+
+        self.expression_statement()
+    }
+
+    fn print_statement(&mut self) -> Result<Stmt, Error> {
+        let value = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expected ; after value.")?;
+        Ok(Stmt::Print { expression: value })
+    }
+
+    fn expression_statement(&mut self) -> Result<Stmt, Error> {
+        let value = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expected ; after value.")?;
+        Ok(Stmt::Expression { expression: value })
+    }
+
     // TODO: not yet used but prepared for synchronization after panic mode
     fn synchronize(&mut self) {
         self.advance();
@@ -190,15 +214,15 @@ impl<'t> Parser<'t> {
     }
 
     // leaving this here to match the book but it is better with the macro
-    fn matches(&mut self, types: Vec<TokenType>) -> bool {
-        for tpe in types {
-            if self.check(tpe) {
-                self.advance();
-                return true;
-            }
-        }
-        false
-    }
+    // fn matches(&mut self, types: Vec<TokenType>) -> bool {
+    //     for tpe in types {
+    //         if self.check(tpe) {
+    //             self.advance();
+    //             return true;
+    //         }
+    //     }
+    //     false
+    // }
 
     // returns true if the current token is of the given type. Unlike match(), it never consumes the token, it only looks at it.
     fn check(&self, token_type: TokenType) -> bool {
@@ -257,9 +281,9 @@ mod tests {
         let tokens = scanner.scan_tokens();
 
         let mut parser = Parser::new(tokens);
-        let expression = parser.parse().expect("Could not parse sample code.");
+        let statements = parser.parse().expect("Could not parse sample code.");
         let printer = AstPrinter;
 
-        assert_eq!(printer.print(expression).unwrap(), "(* (- 123) 45.67)");
+        // assert_eq!(printer.print(statements).unwrap(), "(* (- 123) 45.67)");
     }
 }

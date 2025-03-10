@@ -42,18 +42,11 @@ impl fmt::Display for LiteralValue {
     }
 }
 
-pub trait Visitor<R> {
-    fn visit_binary_expr(&self, left: &Expr, operator: &Token, right: &Expr) -> Result<R, Error>;
-    fn visit_grouping_expr(&self, expression: &Expr) -> Result<R, Error>;
-    fn visit_literal_expr(&self, value: &LiteralValue) -> Result<R, Error>;
-    fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> Result<R, Error>;
-}
-
 impl Expr {
     // we could have used an opaque type pub fn accept<R>(&self, visitor: &impl Visitor<R>) -> R
     // or dynamic dispatch pub fn accept<R>(&self, visitor: &dyn Visitor<R>) -> R
     // instead of the trait bound
-    pub fn accept<R, T: Visitor<R>>(&self, visitor: &T) -> Result<R, Error> {
+    pub fn accept<R, T: expr::Visitor<R>>(&self, visitor: &T) -> Result<R, Error> {
         match self {
             Expr::Binary {
                 left,
@@ -64,6 +57,50 @@ impl Expr {
             Expr::Literal { value } => visitor.visit_literal_expr(value),
             Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, right),
         }
+    }
+}
+
+pub mod expr {
+    use crate::error::Error;
+    use crate::token::Token;
+
+    use super::{Expr, LiteralValue};
+
+    pub trait Visitor<R> {
+        fn visit_binary_expr(
+            &self,
+            left: &Expr,
+            operator: &Token,
+            right: &Expr,
+        ) -> Result<R, Error>;
+        fn visit_grouping_expr(&self, expression: &Expr) -> Result<R, Error>;
+        fn visit_literal_expr(&self, value: &LiteralValue) -> Result<R, Error>;
+        fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> Result<R, Error>;
+    }
+}
+
+pub enum Stmt {
+    Expression { expression: Expr },
+    Print { expression: Expr },
+}
+
+impl Stmt {
+    pub fn accept<R, T: stmt::Visitor<R>>(&self, visitor: &T) -> Result<R, Error> {
+        match self {
+            Stmt::Expression { expression } => visitor.visit_expression_stmt(expression),
+            Stmt::Print { expression } => visitor.visit_print_stmt(expression),
+        }
+    }
+}
+
+pub mod stmt {
+    use crate::error::Error;
+
+    use super::{Expr, Stmt};
+
+    pub trait Visitor<R> {
+        fn visit_expression_stmt(&self, stmt: &Expr) -> Result<R, Error>;
+        fn visit_print_stmt(&self, stmt: &Expr) -> Result<R, Error>;
     }
 }
 
@@ -91,7 +128,7 @@ impl AstPrinter {
     }
 }
 
-impl Visitor<String> for AstPrinter {
+impl expr::Visitor<String> for AstPrinter {
     fn visit_binary_expr(
         &self,
         left: &Expr,
