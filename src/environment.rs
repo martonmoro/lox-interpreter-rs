@@ -28,4 +28,17 @@ impl Environment {
             })
         }
     }
+
+    pub fn assign(&mut self, name: &Token, value: Object) -> Result<(), Error> {
+        let key = &*name.lexeme;
+        if self.values.contains_key(key) {
+            self.values.insert(name.lexeme.clone(), value);
+            Ok(())
+        } else {
+            Err(Error::Runtime {
+                token: name.clone(),
+                message: format!("Undefined variable '{}'.", key),
+            })
+        }
+    }
 }

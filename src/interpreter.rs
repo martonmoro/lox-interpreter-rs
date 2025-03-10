@@ -164,6 +164,12 @@ impl expr::Visitor<Object> for Interpreter {
     fn visit_variable_expr(&self, name: &Token) -> Result<Object, Error> {
         self.environment.borrow().get(name)
     }
+
+    fn visit_assign_expr(&self, name: &Token, value: &Expr) -> Result<Object, Error> {
+        let v = self.evaluate(value)?;
+        self.environment.borrow_mut().assign(name, v.clone())?;
+        Ok(v)
+    }
 }
 
 impl stmt::Visitor<()> for Interpreter {

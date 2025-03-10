@@ -77,9 +77,33 @@ impl<'t> Parser<'t> {
         Ok(Stmt::Var { name, initializer })
     }
 
-    // expression     → equality ;
+    // expression     → assignment ;
     fn expression(&mut self) -> Result<Expr, Error> {
-        self.equality()
+        self.assignment()
+    }
+
+    // The trick is that the parser first processes the left side as it it were an expression (r-value),
+    // then converts it to an assignment target (l-value) if an = sign follows
+    // This conversion works because it turns out that every valid assignment target happens to also be valid syntax as a normal expression.
+    // assignment     → IDENTIFIER "=" assignment | equality ;
+    fn assignment(&mut self) -> Result<Expr, Error> {
+        let expr = self.equality()?;
+
+        if matches!(self, TokenType::Equal) {
+            // contrary to binary operators we don't loop to build up a sequence of the same operator
+            // since assignment is right-associative, we instead recurisvely call assignment() to parse the right hand side
+            let value = Box::new(self.assignment()?);
+
+            if let Expr::Variable { name } = expr {
+                return Ok(Expr::Assign { name, value });
+            }
+
+            let equals = self.previous();
+            // we are not throwing because the parser is not in a confused state where we need to go into panic mode and synchronize
+            self.error(equals, "Invalid assignment target.");
+        }
+
+        Ok(expr)
     }
 
     // equality       → comparison ( ( "!=" | "==" ) comparison )* ;

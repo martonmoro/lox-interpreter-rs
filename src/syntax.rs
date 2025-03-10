@@ -141,7 +141,7 @@ impl AstPrinter {
         expr.accept(self)
     }
 
-    fn paranthesize(&self, name: String, exprs: Vec<&Expr>) -> Result<String, Error> {
+    fn parenthesize(&self, name: String, exprs: Vec<&Expr>) -> Result<String, Error> {
         let mut builder = String::new();
 
         builder.push_str("(");
@@ -165,11 +165,11 @@ impl expr::Visitor<String> for AstPrinter {
         operator: &Token,
         right: &Expr,
     ) -> Result<String, Error> {
-        self.paranthesize(operator.lexeme.clone(), vec![left, right])
+        self.parenthesize(operator.lexeme.clone(), vec![left, right])
     }
 
     fn visit_grouping_expr(&self, expression: &Expr) -> Result<String, Error> {
-        self.paranthesize("group".to_string(), vec![expression])
+        self.parenthesize("group".to_string(), vec![expression])
     }
 
     fn visit_literal_expr(&self, value: &LiteralValue) -> Result<String, Error> {
@@ -177,11 +177,15 @@ impl expr::Visitor<String> for AstPrinter {
     }
 
     fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> Result<String, Error> {
-        self.paranthesize(operator.lexeme.clone(), vec![right])
+        self.parenthesize(operator.lexeme.clone(), vec![right])
     }
 
     fn visit_variable_expr(&self, name: &Token) -> Result<String, Error> {
         Ok(name.lexeme.clone())
+    }
+
+    fn visit_assign_expr(&self, name: &Token, value: &Expr) -> Result<String, Error> {
+        self.parenthesize(name.lexeme.clone(), vec![value])
     }
 }
 
