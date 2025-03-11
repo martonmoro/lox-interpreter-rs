@@ -177,7 +177,7 @@ cargo test
 - ✅ Block scoping
 - 🔄 Functions (in progress)
 - 🔄 Resolving and Binding
-- 🔄 Classes (in progress)
+- 🔄 Classes
 - 🔄 Inheritance
 
 ## Running Examples
@@ -199,6 +199,12 @@ To run an example:
 
 ```bash
 cargo run -- examples/fibonacci_for.lox
+```
+
+Or directly with the binary:
+
+```bash
+./target/release/lox_interpreter_rs examples/fibonacci_for.lox
 ```
 
 The GitHub Actions workflow automatically runs all examples as part of CI to verify interpreter functionality.
