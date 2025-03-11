@@ -72,6 +72,9 @@ jobs:
           command: build
           args: --release
 
+      - name: Check binary path
+        run: find ./target/release -type f -executable | grep -v '\.d$'
+
       - name: Create examples directory
         run: mkdir -p examples
 
@@ -165,22 +168,22 @@ jobs:
       - name: Run examples
         run: |
           echo "Running assign.lox:"
-          ./target/release/lox_interpreter_rs examples/assign.lox
+          ./target/release/lox-interpreter-rs examples/assign.lox
 
           echo -e "\nRunning branching.lox:"
-          ./target/release/lox_interpreter_rs examples/branching.lox
+          ./target/release/lox-interpreter-rs examples/branching.lox
 
           echo -e "\nRunning logical.lox:"
-          ./target/release/lox_interpreter_rs examples/logical.lox
+          ./target/release/lox-interpreter-rs examples/logical.lox
 
           echo -e "\nRunning print.lox:"
-          ./target/release/lox_interpreter_rs examples/print.lox
+          ./target/release/lox-interpreter-rs examples/print.lox
 
           echo -e "\nRunning scope.lox:"
-          ./target/release/lox_interpreter_rs examples/scope.lox
+          ./target/release/lox-interpreter-rs examples/scope.lox
 
           echo -e "\nRunning fibonacci_for.lox (first 10 numbers):"
-          ./target/release/lox_interpreter_rs examples/fibonacci_for.lox | head -10
+          ./target/release/lox-interpreter-rs examples/fibonacci_for.lox | head -10
 
           echo -e "\nRunning fibonacci_while.lox (first 10 numbers):"
-          ./target/release/lox_interpreter_rs examples/fibonacci_while.lox | head -10
+          ./target/release/lox-interpreter-rs examples/fibonacci_while.lox | head -10
