@@ -78,6 +78,17 @@ Error propagation uses Rust's `Result` type with detailed error information, ena
 - Proper error recovery in the parser
 - Graceful handling of runtime errors
 
+### Functional Programming Techniques
+
+The codebase demonstrates functional programming techniques in Rust, such as:
+
+- **Monadic Error Handling**: Using `Result` and `Option` types as monads for clean error propagation
+- **Combinators**: Utilizing functions like `map`, `unwrap_or`, and other functional combinators for more expressive code
+- **Declarative Style**: Favoring declarative over imperative code where appropriate
+- **Immutability**: Preferring immutable data structures when possible
+
+These approaches lead to more concise and robust code, reducing the likelihood of bugs while improving readability.
+
 ### Project Structure
 
 - `main.rs` - Program entry point, REPL and file execution logic
