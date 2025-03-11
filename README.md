@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-This project is a feature-complete interpreter for the Lox programming language, implemented in idiomatic Rust. Based on Bob Nystrom's book ["Crafting Interpreters"](https://craftinginterpreters.com/), this implementation leverages Rust's strengths to create a memory-safe, performant interpreter with clean, maintainable code.
+This project is a feature-complete interpreter for the Lox programming language, implemented in idiomatic Rust. Based on Robert Nystrom's book ["Crafting Interpreters"](https://craftinginterpreters.com/), this implementation leverages Rust's strengths to create a memory-safe, performant interpreter with clean, maintainable code.
 
 ## Features
 
@@ -246,7 +246,7 @@ This project served as a dual learning experience, deepening my understanding of
 
 ## Acknowledgements
 
-This project is based on Bob Nystrom's excellent book ["Crafting Interpreters"](https://craftinginterpreters.com/), which provides a clear and thorough explanation of interpreter implementation. The original Java code has been thoughtfully adapted to idiomatic Rust.
+This project is based on Robert Nystrom's excellent book ["Crafting Interpreters"](https://craftinginterpreters.com/), which provides a clear and thorough explanation of interpreter implementation. The original Java code has been thoughtfully adapted to idiomatic Rust.
 
 ## License
 
