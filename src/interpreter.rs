@@ -239,7 +239,7 @@ impl stmt::Visitor<()> for Interpreter {
         self.execute_block(
             statements,
             Rc::new(RefCell::new(Environment::from(&self.environment))),
-        );
+        )?;
         Ok(())
     }
 }
