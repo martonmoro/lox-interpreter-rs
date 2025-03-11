@@ -52,7 +52,7 @@ impl<'t> Parser<'t> {
         }
     }
 
-    // statement      → exprStmt | printStmt | block ;
+    // statement      → exprStmt | printStmt | ifStmt | block ;
     fn statement(&mut self) -> Result<Stmt, Error> {
         if matches!(self, TokenType::Print) {
             self.print_statement()
@@ -60,9 +60,33 @@ impl<'t> Parser<'t> {
             Ok(Stmt::Block {
                 statements: self.block()?,
             })
+        } else if matches!(self, TokenType::If) {
+            self.if_statement()
         } else {
             self.expression_statement()
         }
+    }
+
+    // the else is bound to the nearest if that precedes it
+    // ifStmt         → "if" "(" expression ")" statement ( "else" statement )? ;
+    fn if_statement(&mut self) -> Result<Stmt, Error> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'if'.")?;
+        let condition = self.expression()?;
+        self.consume(TokenType::RightParen, "Expect ')' after if condition.")?;
+
+        let then_branch = Box::new(self.statement()?);
+
+        let else_branch = Box::new(if matches!(self, TokenType::Else) {
+            Some(self.statement()?)
+        } else {
+            None
+        });
+
+        Ok(Stmt::If {
+            condition,
+            then_branch,
+            else_branch,
+        })
     }
 
     // block          → "{" declaration* "}" ;
@@ -102,9 +126,9 @@ impl<'t> Parser<'t> {
     // The trick is that the parser first processes the left side as it it were an expression (r-value),
     // then converts it to an assignment target (l-value) if an = sign follows
     // This conversion works because it turns out that every valid assignment target happens to also be valid syntax as a normal expression.
-    // assignment     → IDENTIFIER "=" assignment | equality ;
+    // assignment     → IDENTIFIER "=" assignment | logic_or ;
     fn assignment(&mut self) -> Result<Expr, Error> {
-        let expr = self.equality()?;
+        let expr = self.logic_or()?;
 
         if matches!(self, TokenType::Equal) {
             // contrary to binary operators we don't loop to build up a sequence of the same operator
@@ -118,6 +142,40 @@ impl<'t> Parser<'t> {
             let equals = self.previous();
             // we are not throwing because the parser is not in a confused state where we need to go into panic mode and synchronize
             self.error(equals, "Invalid assignment target.");
+        }
+
+        Ok(expr)
+    }
+
+    //logic_or       → logic_and ( "or" logic_and )* ;
+    fn logic_or(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.logic_and()?;
+
+        while matches!(self, TokenType::Or) {
+            let operator = (*self.previous()).clone();
+            let right = self.logic_and()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right),
+            }
+        }
+
+        Ok(expr)
+    }
+
+    // logic_and      → equality ( "and" equality )* ;
+    fn logic_and(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.equality()?;
+
+        while matches!(self, TokenType::Or) {
+            let operator = (*self.previous()).clone();
+            let right = self.equality()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right),
+            }
         }
 
         Ok(expr)

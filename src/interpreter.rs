@@ -185,6 +185,32 @@ impl expr::Visitor<Object> for Interpreter {
         }
     }
 
+    /*
+       Since Lox is dynamically typed, we allow operands of any type and use truthiness to determine what each operand represents.
+       We apply similar reasoning to the result.
+       Instead of promising to literally return true or false, a logic operator merely guarantees it will return a value with appropriate truthiness.
+    */
+    fn visit_logical_expr(
+        &self,
+        left: &Expr,
+        operator: &Token,
+        right: &Expr,
+    ) -> Result<Object, Error> {
+        let l = self.evaluate(left)?;
+
+        if operator.token_type == TokenType::Or {
+            if self.is_truthy(&l) {
+                return Ok(l);
+            }
+        } else {
+            if !self.is_truthy(&l) {
+                return Ok(l);
+            }
+        }
+
+        self.evaluate(right)
+    }
+
     fn visit_variable_expr(&self, name: &Token) -> Result<Object, Error> {
         self.environment.borrow().get(name)
     }
@@ -201,6 +227,23 @@ impl stmt::Visitor<()> for Interpreter {
         self.evaluate(expression)?;
         Ok(())
     }
+
+    fn visit_if_stmt(
+        &mut self,
+        condition: &Expr,
+        then_branch: &Stmt,
+        else_branch: &Option<Stmt>,
+    ) -> Result<(), Error> {
+        let condition_val = self.evaluate(condition)?;
+        if self.is_truthy(&condition_val) {
+            self.execute(then_branch)?;
+        } else if let Some(else_bran) = else_branch {
+            self.execute(else_bran)?;
+        }
+
+        Ok(())
+    }
+
     fn visit_print_stmt(&self, expression: &Expr) -> Result<(), Error> {
         let value = self.evaluate(expression)?;
         println!("{}", self.stringify(value));

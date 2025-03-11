@@ -11,6 +11,12 @@ pub enum Expr {
         operator: Token,
         right: Box<Expr>,
     },
+    // we are using this instead of Binary to short-circuit
+    Logical {
+        left: Box<Expr>,
+        operator: Token,
+        right: Box<Expr>,
+    },
     Unary {
         operator: Token,
         right: Box<Expr>,
@@ -66,6 +72,11 @@ impl Expr {
                 operator,
                 right,
             } => visitor.visit_binary_expr(left, operator, right),
+            Expr::Logical {
+                left,
+                operator,
+                right,
+            } => visitor.visit_logical_expr(left, operator, right),
             Expr::Grouping { expression } => visitor.visit_grouping_expr(expression),
             Expr::Literal { value } => visitor.visit_literal_expr(value),
             Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, right),
@@ -83,6 +94,12 @@ pub mod expr {
 
     pub trait Visitor<R> {
         fn visit_binary_expr(
+            &self,
+            left: &Expr,
+            operator: &Token,
+            right: &Expr,
+        ) -> Result<R, Error>;
+        fn visit_logical_expr(
             &self,
             left: &Expr,
             operator: &Token,
@@ -110,6 +127,11 @@ pub enum Stmt {
         name: Token,
         initializer: Option<Expr>,
     },
+    If {
+        condition: Expr,
+        then_branch: Box<Stmt>,
+        else_branch: Box<Option<Stmt>>,
+    },
     Null, // placeholder until statement handling is figured out after synchronize()
 }
 
@@ -121,6 +143,11 @@ impl Stmt {
             Stmt::Var { name, initializer } => visitor.visit_var_stmt(name, initializer),
             Stmt::Block { statements } => visitor.visit_block_stmt(statements),
             Stmt::Null => unimplemented!(),
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => visitor.visit_if_stmt(condition, then_branch, else_branch),
         }
     }
 }
@@ -136,6 +163,12 @@ pub mod stmt {
         fn visit_print_stmt(&self, stmt: &Expr) -> Result<R, Error>;
         fn visit_var_stmt(&self, name: &Token, initializer: &Option<Expr>) -> Result<R, Error>;
         fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<R, Error>;
+        fn visit_if_stmt(
+            &mut self,
+            condition: &Expr,
+            then_branch: &Stmt,
+            else_branch: &Option<Stmt>,
+        ) -> Result<R, Error>;
     }
 }
 
@@ -191,6 +224,15 @@ impl expr::Visitor<String> for AstPrinter {
 
     fn visit_assign_expr(&self, name: &Token, value: &Expr) -> Result<String, Error> {
         self.parenthesize(name.lexeme.clone(), vec![value])
+    }
+
+    fn visit_logical_expr(
+        &self,
+        left: &Expr,
+        operator: &Token,
+        right: &Expr,
+    ) -> Result<String, Error> {
+        self.parenthesize(operator.lexeme.clone(), vec![left, right])
     }
 }
 
