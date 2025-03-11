@@ -52,10 +52,12 @@ impl<'t> Parser<'t> {
         }
     }
 
-    // statement      → exprStmt | printStmt | ifStmt | block ;
+    // statement      → exprStmt | printStmt | ifStmt | block | whileStmt ;
     fn statement(&mut self) -> Result<Stmt, Error> {
         if matches!(self, TokenType::Print) {
             self.print_statement()
+        } else if matches!(self, TokenType::While) {
+            self.while_statement()
         } else if matches!(self, TokenType::LeftBrace) {
             Ok(Stmt::Block {
                 statements: self.block()?,
@@ -99,6 +101,19 @@ impl<'t> Parser<'t> {
 
         self.consume(TokenType::RightBrace, "Expect '}' after block.")?;
         Ok(statements)
+    }
+
+    // whileStmt      → "while" "(" expression ")" statement ;
+    fn while_statement(&mut self) -> Result<Stmt, Error> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'while'.")?;
+        let condition = self.expression()?;
+        self.consume(TokenType::RightParen, "Expect ')' after condition.")?;
+        let body = self.statement()?;
+
+        Ok(Stmt::While {
+            condition,
+            body: Box::new(body),
+        })
     }
 
     // varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
