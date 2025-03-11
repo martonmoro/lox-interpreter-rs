@@ -52,9 +52,13 @@ impl<'t> Parser<'t> {
         }
     }
 
-    // statement      → exprStmt | printStmt | ifStmt | block | whileStmt ;
+    // statement      → exprStmt | printStmt | ifStmt | block | whileStmt | forStmt ;
     fn statement(&mut self) -> Result<Stmt, Error> {
-        if matches!(self, TokenType::Print) {
+        if matches!(self, TokenType::For) {
+            self.for_statement()
+        } else if matches!(self, TokenType::If) {
+            self.if_statement()
+        } else if matches!(self, TokenType::Print) {
             self.print_statement()
         } else if matches!(self, TokenType::While) {
             self.while_statement()
@@ -62,8 +66,6 @@ impl<'t> Parser<'t> {
             Ok(Stmt::Block {
                 statements: self.block()?,
             })
-        } else if matches!(self, TokenType::If) {
-            self.if_statement()
         } else {
             self.expression_statement()
         }
@@ -114,6 +116,59 @@ impl<'t> Parser<'t> {
             condition,
             body: Box::new(body),
         })
+    }
+
+    // forStmt        → "for" "(" ( varDecl | exprStmt | ";" ) expression? ";" expression? ")" statement ;
+    fn for_statement(&mut self) -> Result<Stmt, Error> {
+        self.consume(TokenType::LeftParen, "Expected '(' after 'for'.")?;
+
+        let initializer = if matches!(self, TokenType::Semicolon) {
+            None
+        } else if matches!(self, TokenType::Var) {
+            Some(self.var_declaration()?)
+        } else {
+            Some(self.expression_statement()?)
+        };
+
+        let condition = if !self.check(TokenType::Semicolon) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(TokenType::Semicolon, "Expect ';' after loop condition.")?;
+
+        let increment = if !self.check(TokenType::RightParen) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(TokenType::RightParen, "Expect ')' after for clauses.")?;
+
+        let mut body = self.statement()?;
+
+        if let Some(incr) = increment {
+            let incr_stmt = Stmt::Expression { expression: incr };
+            body = Stmt::Block {
+                statements: vec![body, incr_stmt],
+            }
+        }
+
+        body = Stmt::While {
+            condition: condition.unwrap_or(Expr::Literal {
+                value: LiteralValue::Boolean(true),
+            }),
+            body: Box::new(body),
+        };
+
+        if let Some(init) = initializer {
+            body = Stmt::Block {
+                statements: vec![init, body],
+            };
+        }
+
+        Ok(body)
     }
 
     // varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
