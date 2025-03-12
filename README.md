@@ -1,6 +1,7 @@
 # Lox-rs: A Rust Implementation of the Lox Language
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+![Rust](https://img.shields.io/badge/rust-1.50%2B-orange.svg)
 
 This project is a feature-complete interpreter for the Lox programming language, implemented in idiomatic Rust. Based on Robert Nystrom's book ["Crafting Interpreters"](https://craftinginterpreters.com/), this implementation leverages Rust's strengths to create a memory-safe, performant interpreter with clean, maintainable code.
 
