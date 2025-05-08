@@ -1,7 +1,10 @@
+use crate::function::Function;
+
 // The book is using java.lang.Object
 #[derive(Debug, Clone)]
 pub enum Object {
     Boolean(bool),
+    Callable(Function),
     Null,
     Number(f64),
     String(String),

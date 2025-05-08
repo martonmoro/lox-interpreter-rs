@@ -1,19 +1,38 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::environment::Environment;
 use crate::error::Error;
+use crate::function::Function;
 use crate::object::Object;
 use crate::syntax::{expr, stmt, Stmt};
 use crate::syntax::{Expr, LiteralValue};
 use crate::token::{Token, TokenType};
 pub struct Interpreter {
+    // Fix reference to the outermost global env
+    pub globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
+        let globals = Rc::new(RefCell::new(Environment::new()));
+        let clock: Object = Object::Callable(Function::Native {
+            arity: 0,
+            body: Box::new(|_args: &Vec<Object>| {
+                Object::Number(
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .expect("Could not retrieve time.")
+                        .as_millis() as f64,
+                )
+            }),
+        });
+        // In Lox functions and variables occupy the same namespace.
+        globals.borrow_mut().define("clock".to_string(), clock);
         Self {
+            globals: Rc::clone(&globals),
             environment: Rc::new(RefCell::new(Environment::new())),
         }
     }
@@ -34,7 +53,7 @@ impl Interpreter {
     To “change” the environment, you pass a different one as you recurse down the tree.
     You don’t have to restore the old one, since the new one lives on the Java stack and is implicitly discarded when the interpreter returns from the block’s visit method.
      */
-    fn execute_block(
+    pub fn execute_block(
         &mut self,
         statements: &Vec<Stmt>,
         environment: Rc<RefCell<Environment>>,
@@ -53,7 +72,7 @@ impl Interpreter {
     }
 
     // simply call interpreters visitor implementation
-    fn evaluate(&self, expr: &Expr) -> Result<Object, Error> {
+    fn evaluate(&mut self, expr: &Expr) -> Result<Object, Error> {
         expr.accept(self)
     }
 
@@ -63,6 +82,7 @@ impl Interpreter {
             Object::Number(n) => n.to_string(),
             Object::Boolean(b) => b.to_string(),
             Object::String(s) => s,
+            Object::Callable(f) => f.to_string(),
         }
     }
 
@@ -98,11 +118,11 @@ impl expr::Visitor<Object> for Interpreter {
         }
     }
 
-    fn visit_grouping_expr(&self, expression: &Expr) -> Result<Object, Error> {
+    fn visit_grouping_expr(&mut self, expression: &Expr) -> Result<Object, Error> {
         self.evaluate(expression)
     }
 
-    fn visit_unary_expr(&self, operator: &Token, right: &Expr) -> Result<Object, Error> {
+    fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> Result<Object, Error> {
         let right = self.evaluate(right)?;
 
         match operator.token_type {
@@ -115,8 +135,56 @@ impl expr::Visitor<Object> for Interpreter {
         }
     }
 
+    fn visit_call_expr(
+        &mut self,
+        callee: &Expr,
+        paren: &Token,
+        arguments: &Vec<Expr>,
+    ) -> Result<Object, Error> {
+        let callee_value = self.evaluate(callee)?;
+
+        let argument_values: Result<Vec<Object>, Error> = arguments
+            .into_iter()
+            .map(|expr| self.evaluate(expr))
+            .collect();
+
+        let args = argument_values?;
+
+        if let Object::Callable(function) = callee_value {
+            // Different languages take different approaches to this problem. Of
+            // course, most statically typed languages check this at compile
+            // time and refuse to compile the code if the argument count doesn’t
+            // match the function’s arity. JavaScript discards any extra
+            // arguments you pass. If you don’t pass enough, it fills in the
+            // missing parameters with the magic
+            // sort-of-like-null-but-not-really value undefined. Python is
+            // stricter. It raises a runtime error if the argument list is too
+            // short or too long.
+
+            // Before invoking the callable, we check to see if the argument list’s length matches the callable’s arity.
+            let args_size = args.len();
+            if args_size != function.arity() {
+                Err(Error::Runtime {
+                    token: paren.clone(),
+                    message: format!(
+                        "Expected {} arguments but got {}.",
+                        function.arity(),
+                        args_size
+                    ),
+                })
+            } else {
+                function.call(self, &args)
+            }
+        } else {
+            Err(Error::Runtime {
+                token: paren.clone(),
+                message: "Can only call functions and classes.".to_string(),
+            })
+        }
+    }
+
     fn visit_binary_expr(
-        &self,
+        &mut self,
         left: &Expr,
         operator: &Token,
         right: &Expr,
@@ -191,7 +259,7 @@ impl expr::Visitor<Object> for Interpreter {
        Instead of promising to literally return true or false, a logic operator merely guarantees it will return a value with appropriate truthiness.
     */
     fn visit_logical_expr(
-        &self,
+        &mut self,
         left: &Expr,
         operator: &Token,
         right: &Expr,
@@ -211,11 +279,11 @@ impl expr::Visitor<Object> for Interpreter {
         self.evaluate(right)
     }
 
-    fn visit_variable_expr(&self, name: &Token) -> Result<Object, Error> {
+    fn visit_variable_expr(&mut self, name: &Token) -> Result<Object, Error> {
         self.environment.borrow().get(name)
     }
 
-    fn visit_assign_expr(&self, name: &Token, value: &Expr) -> Result<Object, Error> {
+    fn visit_assign_expr(&mut self, name: &Token, value: &Expr) -> Result<Object, Error> {
         let v = self.evaluate(value)?;
         self.environment.borrow_mut().assign(name, v.clone())?;
         Ok(v)
@@ -223,9 +291,41 @@ impl expr::Visitor<Object> for Interpreter {
 }
 
 impl stmt::Visitor<()> for Interpreter {
-    fn visit_expression_stmt(&self, expression: &Expr) -> Result<(), Error> {
+    fn visit_expression_stmt(&mut self, expression: &Expr) -> Result<(), Error> {
         self.evaluate(expression)?;
         Ok(())
+    }
+
+    // We take a syntax node - a compile-time representation of the function - and convert it to its runtime representation
+    // Function declarations are different from other literal nodes in that the declaration also binds the resulting object to a new variable
+    fn visit_function_stmt(
+        &mut self,
+        name: &Token,
+        params: &Vec<Token>,
+        body: &Vec<Stmt>,
+    ) -> Result<(), Error> {
+        let function = Function::User {
+            name: name.clone(),
+            params: params.clone(),
+            body: body.clone(),
+            closure: Rc::clone(&self.environment),
+        };
+        self.environment
+            .borrow_mut()
+            .define(name.lexeme.clone(), Object::Callable(function));
+        Ok(())
+    }
+
+    fn visit_return_stmt(&mut self, keyword: &Token, value: &Option<Expr>) -> Result<(), Error> {
+        let return_value = value
+            .as_ref()
+            .map(|v| self.evaluate(v))
+            .unwrap_or(Ok(Object::Null))?;
+
+        // Use Err to jump back to the top of the stack
+        Err(Error::Return {
+            value: return_value,
+        })
     }
 
     fn visit_if_stmt(
@@ -254,7 +354,7 @@ impl stmt::Visitor<()> for Interpreter {
         Ok(())
     }
 
-    fn visit_print_stmt(&self, expression: &Expr) -> Result<(), Error> {
+    fn visit_print_stmt(&mut self, expression: &Expr) -> Result<(), Error> {
         let value = self.evaluate(expression)?;
         println!("{}", self.stringify(value));
         Ok(())
@@ -275,7 +375,7 @@ impl stmt::Visitor<()> for Interpreter {
     // }
 
     // if we want to do more functional style
-    fn visit_var_stmt(&self, name: &Token, initializer: &Option<Expr>) -> Result<(), Error> {
+    fn visit_var_stmt(&mut self, name: &Token, initializer: &Option<Expr>) -> Result<(), Error> {
         let value = initializer
             .as_ref() // we want to borrow the Expr
             .map(|i| self.evaluate(i)) // if it was a some call self.evaluate and wrap the result in a Some, if None leave it as None

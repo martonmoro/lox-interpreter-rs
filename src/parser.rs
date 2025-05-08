@@ -34,10 +34,12 @@ impl<'t> Parser<'t> {
         Ok(statements)
     }
 
-    // declaration    → varDecl | statement ;
+    // declaration    → funDecl | varDecl | statement ;
     fn declaration(&mut self) -> Result<Stmt, Error> {
         let statement = if matches!(self, TokenType::Var) {
             self.var_declaration()
+        } else if matches!(self, TokenType::Fun) {
+            self.function("function")
         } else {
             self.statement()
         };
@@ -52,7 +54,52 @@ impl<'t> Parser<'t> {
         }
     }
 
-    // statement      → exprStmt | printStmt | ifStmt | block | whileStmt | forStmt ;
+    // funDecl        → "fun" function ;
+    // function       → IDENTIFIER "(" parameters? ")" block ;
+    // parameters     → IDENTIFIER ( "," IDENTIFIER )* ;
+    // The parameters rule is like the arguments rule but instead of expressions it has identifiers
+
+    // we’ll reuse the function() method later to parse methods inside classes.
+    fn function(&mut self, kind: &str) -> Result<Stmt, Error> {
+        // First we consume the identifier token for the function's name
+        let name = self.consume(
+            TokenType::Identifier,
+            format!("Expect {} name.", kind).as_str(),
+        )?;
+
+        // Next, we parse the parameter list and the pair of parantheses wrapped around it
+        // The result is a list of tokens for each parameter's name
+        self.consume(
+            TokenType::LeftParen,
+            format!("Expect '(' after {} name.", kind).as_str(),
+        )?;
+        let mut params: Vec<Token> = Vec::new();
+        if !self.check(TokenType::RightParen) {
+            loop {
+                if params.len() >= 255 {
+                    // No error returned
+                    self.error(self.peek(), "Can't have more than 255 parameters.");
+                }
+
+                params.push(self.consume(TokenType::Identifier, "Expect parameter name.")?);
+
+                if !matches!(self, TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+        self.consume(TokenType::RightParen, "Expect ')' after parameters.")?;
+
+        // Finally we parse the body and wrap it all up in a funciton node
+        self.consume(
+            TokenType::LeftBrace,
+            format!("Expected '{{' before {} body", kind).as_str(),
+        )?;
+        let body = self.block()?;
+        Ok(Stmt::Function { name, params, body })
+    }
+
+    // statement      → exprStmt | printStmt | ifStmt | block | returnStmt | whileStmt | forStmt ;
     fn statement(&mut self) -> Result<Stmt, Error> {
         if matches!(self, TokenType::For) {
             self.for_statement()
@@ -60,6 +107,8 @@ impl<'t> Parser<'t> {
             self.if_statement()
         } else if matches!(self, TokenType::Print) {
             self.print_statement()
+        } else if matches!(self, TokenType::Return) {
+            self.return_statement()
         } else if matches!(self, TokenType::While) {
             self.while_statement()
         } else if matches!(self, TokenType::LeftBrace) {
@@ -69,6 +118,20 @@ impl<'t> Parser<'t> {
         } else {
             self.expression_statement()
         }
+    }
+
+    // In Lox, the body of a function is a list of statements which don’t produce values, so we need dedicated syntax for emitting a result.
+    // returnStmt     → "return" expression? ";" ;
+    fn return_statement(&mut self) -> Result<Stmt, Error> {
+        let keyword = self.previous().clone();
+        let value = if !self.check(TokenType::Semicolon) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(TokenType::Semicolon, "Expect ';' after return value.");
+        Ok(Stmt::Return { keyword, value })
     }
 
     // the else is bound to the nearest if that precedes it
@@ -335,7 +398,7 @@ impl<'t> Parser<'t> {
         Ok(expr)
     }
 
-    // unary          → ( "!" | "-" ) unary | primary ;
+    // unary          → ( "!" | "-" ) unary | call ;
     fn unary(&mut self) -> Result<Expr, Error> {
         if matches!(self, TokenType::Bang, TokenType::Minus) {
             let operator = (*self.previous()).clone();
@@ -347,8 +410,58 @@ impl<'t> Parser<'t> {
             return Ok(expr);
         }
 
-        self.primary()
+        self.call()
     }
+
+    // call           → primary ( "(" arguments? ")" )* ;
+    // This rule matches a primary expression followed by zero or more function calls.
+    // If there are no parentheses, this parses a bare primary expression.
+    // Otherwise, each call is recognized by a pair of parentheses with an optional list of arguments inside.
+    fn call(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if matches!(self, TokenType::LeftParen) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, calle: Expr) -> Result<Expr, Error> {
+        let mut arguments: Vec<Expr> = Vec::new();
+        if !self.check(TokenType::RightParen) {
+            loop {
+                if arguments.len() >= 255 {
+                    // Only reporting error, not throwing.
+                    // Throwing is how we kick into panic mode which is what we want if the parser is in a confused state and doesn't know where it is in the grammar anymore.
+                    // But here, the parser is still in a prefectly valid state - it just found too many arguments.
+                    self.error(self.peek(), "Can't have more than 255 arguments.");
+                }
+
+                arguments.push(self.expression()?);
+
+                if !matches!(self, TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+
+        let paren = self.consume(TokenType::RightParen, "Expect ')' after arguments.")?;
+
+        Ok(Expr::Call {
+            callee: Box::new(calle),
+            paren,
+            arguments,
+        })
+    }
+
+    // The argument list grammar is: arguments      → expression ( "," expression )* ;
+    // This rule requires at least one argument expression, followed by zero or more other expressions, each preceded by a comma.
+    // To handle zero-argument calls, the call rule itself considers the entire arguments production to be optional.
 
     // primary        → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
     fn primary(&mut self) -> Result<Expr, Error> {

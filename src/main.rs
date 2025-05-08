@@ -1,5 +1,6 @@
 mod environment;
 mod error;
+mod function;
 mod interpreter;
 mod object;
 mod parser;
@@ -70,6 +71,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
         [_, file_path] => match lox.run_file(file_path) {
             Ok(_) => (),
             Err(Error::Runtime { .. }) => exit(70),
+            Err(Error::Return { .. }) => unreachable!(),
             Err(Error::Parse) => exit(65),
             Err(Error::Io(_)) => unimplemented!(),
         },

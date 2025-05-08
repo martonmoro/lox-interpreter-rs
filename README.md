@@ -187,8 +187,8 @@ cargo test
 - ✅ Variables and assignment
 - ✅ Control flow
 - ✅ Block scoping
-- 🔄 Functions (in progress)
-- 🔄 Resolving and Binding
+- ✅ Functions
+- 🔄 Resolving and Binding (in progress)
 - 🔄 Classes
 - 🔄 Inheritance
 
