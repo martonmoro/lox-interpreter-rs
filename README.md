@@ -201,8 +201,8 @@ cargo test
 - ✅ Control flow
 - ✅ Block scoping
 - ✅ Functions
-- 🔄 Resolving and Binding (in progress)
-- 🔄 Classes
+- ✅ Resolving and Binding
+- 🔄 Classes (in progress)
 - 🔄 Inheritance
 
 ## Running Examples
