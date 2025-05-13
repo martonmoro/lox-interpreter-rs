@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -13,6 +14,13 @@ pub struct Interpreter {
     // Fix reference to the outermost global env
     pub globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
+    // side table: tabular data structure that stores data separately from the
+    // objects it relates to Interactive tools like IDEs often incrementally
+    // reparse and re-resolve parts of the user’s program. It may be hard to
+    // find all of the bits of state that need recalculating when they’re hiding
+    // in the foliage of the syntax tree. A benefit of storing this data outside
+    // of the nodes is that it makes it easy to discard it—simply clear the map.
+    locals: HashMap<Token, usize>,
 }
 
 impl Interpreter {
@@ -33,7 +41,8 @@ impl Interpreter {
         globals.borrow_mut().define("clock".to_string(), clock);
         Self {
             globals: Rc::clone(&globals),
-            environment: Rc::new(RefCell::new(Environment::new())),
+            environment: Rc::clone(&globals),
+            locals: HashMap::new(),
         }
     }
 
@@ -46,6 +55,22 @@ impl Interpreter {
 
     fn execute(&mut self, stmt: &Stmt) -> Result<(), Error> {
         stmt.accept(self)
+    }
+
+    // Each time it visits a variable, it tells the interpreter how many scopes
+    // there are between the current scope and the scope where the variable is
+    // defined. At runtime, this corresponds exactly to the number of
+    // environments between the current one and the enclosing one where the
+    // interpreter can find the variable’s value.
+    pub fn resolve(&mut self, name: &Token, depth: usize) {
+        // We want to store the resolution information somewhere so we can use
+        // it when the variable or assignment expression is later executed, but
+        // where? One obvious place is right in the syntax tree node itself.
+        // That’s a fine approach, and that’s where many compilers store the
+        // results of analyses like this. But instead, we’ll take another common
+        // approach and store it off to the side in a map that associates each
+        // syntax tree node with its resolved data.
+        self.locals.insert(name.clone(), depth);
     }
 
     /*
@@ -104,6 +129,23 @@ impl Interpreter {
 
     fn is_equal(&self, left: &Object, right: &Object) -> bool {
         left.equals(right)
+    }
+
+    // First, we look up the resolved distance in the map. Remember that we
+    // resolved only local variables. Globals are treated specially and don't
+    // end up in the map. So, if we don't find a distance in the map, it must be
+    // global. In that case, we look it up dynamically, directly in the global
+    // env. That throws a runtime error if the variable isn't defined.
+
+    // If we do get a distance, we have a local variable, and we get to take
+    // advantage of the results of our static analysis. Instead of calling
+    // get(), we call this new method on Environment.
+    fn look_up_variable(&self, name: &Token) -> Result<Object, Error> {
+        if let Some(distance) = self.locals.get(name) {
+            self.environment.borrow().get_at(*distance, name)
+        } else {
+            self.globals.borrow().get(name)
+        }
     }
 }
 
@@ -280,12 +322,19 @@ impl expr::Visitor<Object> for Interpreter {
     }
 
     fn visit_variable_expr(&mut self, name: &Token) -> Result<Object, Error> {
-        self.environment.borrow().get(name)
+        self.look_up_variable(name)
     }
 
     fn visit_assign_expr(&mut self, name: &Token, value: &Expr) -> Result<Object, Error> {
         let v = self.evaluate(value)?;
-        self.environment.borrow_mut().assign(name, v.clone())?;
+        if let Some(distance) = self.locals.get(name) {
+            self.environment
+                .borrow_mut()
+                .assign_at(*distance, name, v.clone())?;
+        } else {
+            // TODO: globals or environment?
+            self.globals.borrow_mut().assign(name, v.clone())?;
+        }
         Ok(v)
     }
 }

@@ -4,6 +4,7 @@ mod function;
 mod interpreter;
 mod object;
 mod parser;
+mod resolver;
 mod scanner;
 mod syntax;
 mod token;
@@ -16,6 +17,7 @@ use std::process::exit;
 use error::Error;
 use interpreter::Interpreter;
 use parser::Parser;
+use resolver::Resolver;
 use scanner::Scanner;
 
 struct Lox {
@@ -57,6 +59,24 @@ impl Lox {
 
         let mut parser = Parser::new(tokens);
         let mut statements = parser.parse()?;
+
+        // We don’t run the resolver if there are any parse errors. If the code
+        // has a syntax error, it’s never going to run, so there’s little value
+        // in resolving it. If the syntax is clean, we tell the resolver to do
+        // its thing. The resolver has a reference to the interpreter and pokes
+        // the resolution data directly into it as it walks over variables. When
+        // the interpreter runs next, it has everything it needs.
+        let mut resolver = Resolver::new(&mut self.interpreter);
+        resolver.resolve_stmts(&statements);
+
+        // TODO: check for error and ret.
+        // if (hadError) return;
+
+        // We could go farther and report warnings for code that isn’t
+        // necessarily wrong but probably isn’t useful. For example, many IDEs
+        // will warn if you have unreachable code after a return statement, or a
+        // local variable whose value is never read. All of that would be pretty
+        // easy to add to our static visiting pass, or as separate passes.
 
         self.interpreter.interpret(&mut statements)?;
 
