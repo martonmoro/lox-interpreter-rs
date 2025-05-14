@@ -133,6 +133,10 @@ pub enum Stmt {
     Block {
         statements: Vec<Stmt>,
     },
+    Class {
+        name: Token,
+        methods: Vec<Stmt>, // Assuming all are Stmt::Function
+    },
     Expression {
         expression: Expr,
     },
@@ -175,6 +179,7 @@ impl Stmt {
             Stmt::Return { keyword, value } => visitor.visit_return_stmt(keyword, value),
             Stmt::Var { name, initializer } => visitor.visit_var_stmt(name, initializer),
             Stmt::Block { statements } => visitor.visit_block_stmt(statements),
+            Stmt::Class { name, methods } => visitor.visit_class_stmt(name, methods),
             Stmt::Null => unimplemented!(),
             Stmt::If {
                 condition,
@@ -204,6 +209,7 @@ pub mod stmt {
         fn visit_return_stmt(&mut self, keyword: &Token, value: &Option<Expr>) -> Result<R, Error>;
         fn visit_var_stmt(&mut self, name: &Token, initializer: &Option<Expr>) -> Result<R, Error>;
         fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<R, Error>;
+        fn visit_class_stmt(&mut self, name: &Token, methods: &Vec<Stmt>) -> Result<R, Error>;
         fn visit_if_stmt(
             &mut self,
             condition: &Expr,

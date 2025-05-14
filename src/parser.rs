@@ -34,10 +34,12 @@ impl<'t> Parser<'t> {
         Ok(statements)
     }
 
-    // declaration    → funDecl | varDecl | statement ;
+    // declaration    → classDecl | funDecl | varDecl | statement ;
     fn declaration(&mut self) -> Result<Stmt, Error> {
         let statement = if matches!(self, TokenType::Var) {
             self.var_declaration()
+        } else if matches!(self, TokenType::Class) {
+            self.class_declaration()
         } else if matches!(self, TokenType::Fun) {
             self.function("function")
         } else {
@@ -53,6 +55,25 @@ impl<'t> Parser<'t> {
             other => other,
         }
     }
+
+    // classDecl      → "class" IDENTIFIER "{" function* "}" ;
+    fn class_declaration(&mut self) -> Result<Stmt, Error> {
+        let name = self.consume(TokenType::Identifier, "Expect class name.")?;
+        self.consume(TokenType::LeftBrace, "Expect '{' before class body.")?;
+
+        let mut methods: Vec<Stmt> = Vec::new();
+        while !self.check(TokenType::RightBrace) && !self.is_at_end() {
+            methods.push(self.function("method")?);
+        }
+
+        self.consume(TokenType::RightBrace, "Expect '}' after class body.")?;
+
+        Ok(Stmt::Class { name, methods })
+    }
+
+    // Like most dynamically typed languages, fields are not explicitly listed
+    // in the class declaration. Instances are loose bags of data and you can
+    // freely add fields to them as you see fit using normal imperative code.
 
     // funDecl        → "fun" function ;
     // function       → IDENTIFIER "(" parameters? ")" block ;

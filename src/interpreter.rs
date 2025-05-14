@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::class::LoxClass;
 use crate::environment::Environment;
 use crate::error::Error;
 use crate::function::Function;
@@ -106,6 +107,7 @@ impl Interpreter {
             Object::Null => "nil".to_string(),
             Object::Number(n) => n.to_string(),
             Object::Boolean(b) => b.to_string(),
+            Object::Class(class) => class.borrow().name.clone(),
             Object::String(s) => s,
             Object::Callable(f) => f.to_string(),
         }
@@ -342,6 +344,28 @@ impl expr::Visitor<Object> for Interpreter {
 impl stmt::Visitor<()> for Interpreter {
     fn visit_expression_stmt(&mut self, expression: &Expr) -> Result<(), Error> {
         self.evaluate(expression)?;
+        Ok(())
+    }
+
+    // We declare the class's name in the current environment. Then we turn the
+    // class syntax node into a LoxClass, the runtime representation of a class.
+    // We circle back and store the class object in the variable we previously
+    // declared. That two-stage variable binding process allows references to
+    // the class inside its own methods.
+    fn visit_class_stmt(
+        &mut self,
+        class_name: &Token,
+        class_methods: &Vec<Stmt>,
+    ) -> Result<(), Error> {
+        self.environment
+            .borrow_mut()
+            .define(class_name.lexeme.clone(), Object::Null);
+
+        let lox_class = LoxClass {
+            name: class_name.lexeme.clone(),
+        };
+        let class = Object::Class(Rc::new(RefCell::new(lox_class)));
+        self.environment.borrow_mut().assign(class_name, class);
         Ok(())
     }
 

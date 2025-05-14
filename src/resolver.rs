@@ -232,6 +232,12 @@ impl<'i> stmt::Visitor<()> for Resolver<'i> {
         Ok(())
     }
 
+    fn visit_class_stmt(&mut self, name: &Token, methods: &Vec<Stmt>) -> Result<(), Error> {
+        self.declare(name);
+        self.define(name);
+        Ok(())
+    }
+
     // An expression statement contains a single expression to traverse.
     fn visit_expression_stmt(&mut self, expression: &Expr) -> Result<(), Error> {
         self.resolve_expr(expression);
