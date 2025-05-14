@@ -280,7 +280,12 @@ impl<'t> Parser<'t> {
     // The trick is that the parser first processes the left side as it it were an expression (r-value),
     // then converts it to an assignment target (l-value) if an = sign follows
     // This conversion works because it turns out that every valid assignment target happens to also be valid syntax as a normal expression.
-    // assignment     → IDENTIFIER "=" assignment | logic_or ;
+
+    // Unlike getters, setters don’t chain. However, the reference to call
+    // allows any high-precedence expression before the last dot, including any
+    // number of getters,
+
+    // assignment     → ( call "." )? IDENTIFIER "=" assignment| logic_or ;
     fn assignment(&mut self) -> Result<Expr, Error> {
         let expr = self.logic_or()?;
 
@@ -291,6 +296,12 @@ impl<'t> Parser<'t> {
 
             if let Expr::Variable { name } = expr {
                 return Ok(Expr::Assign { name, value });
+            } else if let Expr::Get { object, name } = expr {
+                return Ok(Expr::Set {
+                    object,
+                    name,
+                    value,
+                });
             }
 
             let equals = self.previous();
@@ -434,7 +445,7 @@ impl<'t> Parser<'t> {
         self.call()
     }
 
-    // call           → primary ( "(" arguments? ")" )* ;
+    // call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
     // This rule matches a primary expression followed by zero or more function calls.
     // If there are no parentheses, this parses a bare primary expression.
     // Otherwise, each call is recognized by a pair of parentheses with an optional list of arguments inside.
@@ -444,6 +455,12 @@ impl<'t> Parser<'t> {
         loop {
             if matches!(self, TokenType::LeftParen) {
                 expr = self.finish_call(expr)?;
+            } else if matches!(self, TokenType::Dot) {
+                let name = self.consume(TokenType::Identifier, "Expect property after '.'.")?;
+                expr = Expr::Get {
+                    object: Box::new(expr),
+                    name: name,
+                }
             } else {
                 break;
             }

@@ -16,11 +16,20 @@ pub enum Expr {
         paren: Token, // We are using this token's location when we report a runtime error caused by a function call (closing paren)
         arguments: Vec<Expr>,
     },
+    Get {
+        object: Box<Expr>,
+        name: Token,
+    },
     // we are using this instead of Binary to short-circuit
     Logical {
         left: Box<Expr>,
         operator: Token,
         right: Box<Expr>,
+    },
+    Set {
+        object: Box<Expr>,
+        name: Token,
+        value: Box<Expr>,
     },
     Unary {
         operator: Token,
@@ -82,11 +91,17 @@ impl Expr {
                 paren,
                 arguments,
             } => visitor.visit_call_expr(callee, paren, arguments),
+            Expr::Get { object, name } => visitor.visit_get_expr(object, name),
             Expr::Logical {
                 left,
                 operator,
                 right,
             } => visitor.visit_logical_expr(left, operator, right),
+            Expr::Set {
+                object,
+                name,
+                value,
+            } => visitor.visit_set_expr(object, name, value),
             Expr::Grouping { expression } => visitor.visit_grouping_expr(expression),
             Expr::Literal { value } => visitor.visit_literal_expr(value),
             Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, right),
@@ -115,6 +130,9 @@ pub mod expr {
             paren: &Token,
             arguments: &Vec<Expr>,
         ) -> Result<R, Error>;
+        fn visit_get_expr(&mut self, object: &Expr, name: &Token) -> Result<R, Error>;
+        fn visit_set_expr(&mut self, object: &Expr, name: &Token, value: &Expr)
+            -> Result<R, Error>;
         fn visit_logical_expr(
             &mut self,
             left: &Expr,
@@ -252,6 +270,19 @@ impl expr::Visitor<String> for AstPrinter {
         right: &Expr,
     ) -> Result<String, Error> {
         self.parenthesize(operator.lexeme.clone(), vec![left, right])
+    }
+
+    fn visit_set_expr(
+        &mut self,
+        object: &Expr,
+        name: &Token,
+        value: &Expr,
+    ) -> Result<String, Error> {
+        self.parenthesize(name.lexeme.clone(), vec![object, value])
+    }
+
+    fn visit_get_expr(&mut self, object: &Expr, name: &Token) -> Result<String, Error> {
+        self.parenthesize(name.lexeme.clone(), vec![object])
     }
 
     fn visit_grouping_expr(&mut self, expression: &Expr) -> Result<String, Error> {

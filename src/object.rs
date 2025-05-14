@@ -1,4 +1,4 @@
-use crate::class::LoxClass;
+use crate::class::{LoxClass, LoxInstance};
 use crate::function::Function;
 
 use std::cell::RefCell;
@@ -10,6 +10,7 @@ pub enum Object {
     Boolean(bool),
     Callable(Function),
     Class(Rc<RefCell<LoxClass>>),
+    Instance(Rc<RefCell<LoxInstance>>),
     Null,
     Number(f64),
     String(String),

@@ -181,9 +181,29 @@ impl<'i> expr::Visitor<()> for Resolver<'i> {
         Ok(())
     }
 
+    // During resolution, we recurse only into the expression to the left of the
+    // dot. The actual property access happens in the interpreter.
+    fn visit_get_expr(&mut self, object: &Expr, name: &Token) -> Result<(), Error> {
+        self.resolve_expr(object);
+        Ok(())
+    }
+
+    // Again, like Expr.Get, the property itself is dynamically evaluated, so
+    // there’s nothing to resolve there. All we need to do is recurse into the
+    // two subexpressions of Expr.Set, the object whose property is being set,
+    // and the value it’s being set to.
+    fn visit_set_expr(&mut self, object: &Expr, name: &Token, value: &Expr) -> Result<(), Error> {
+        self.resolve_expr(value);
+        self.resolve_expr(object);
+        Ok(())
+    }
+
     // We walk the argument list and resolve them all. The thing being called is
     // also an expression (usually a variable expression), so that gets resolved
     // too.
+
+    // property dispatch in Lox is dynamic since we don’t process the property
+    // name during the static resolution pass.
     fn visit_call_expr(
         &mut self,
         callee: &Expr,

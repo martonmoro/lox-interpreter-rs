@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::class::LoxClass;
+use crate::class::{LoxClass, LoxInstance};
 use crate::environment::Environment;
 use crate::error::Error;
 use crate::function::Function;
@@ -108,6 +108,9 @@ impl Interpreter {
             Object::Number(n) => n.to_string(),
             Object::Boolean(b) => b.to_string(),
             Object::Class(class) => class.borrow().name.clone(),
+            Object::Instance(instance) => {
+                format!("{} instance", instance.borrow().class.borrow().name)
+            }
             Object::String(s) => s,
             Object::Callable(f) => f.to_string(),
         }
@@ -191,38 +194,86 @@ impl expr::Visitor<Object> for Interpreter {
             .into_iter()
             .map(|expr| self.evaluate(expr))
             .collect();
-
         let args = argument_values?;
 
-        if let Object::Callable(function) = callee_value {
-            // Different languages take different approaches to this problem. Of
-            // course, most statically typed languages check this at compile
-            // time and refuse to compile the code if the argument count doesn’t
-            // match the function’s arity. JavaScript discards any extra
-            // arguments you pass. If you don’t pass enough, it fills in the
-            // missing parameters with the magic
-            // sort-of-like-null-but-not-really value undefined. Python is
-            // stricter. It raises a runtime error if the argument list is too
-            // short or too long.
-
-            // Before invoking the callable, we check to see if the argument list’s length matches the callable’s arity.
-            let args_size = args.len();
-            if args_size != function.arity() {
-                Err(Error::Runtime {
-                    token: paren.clone(),
-                    message: format!(
-                        "Expected {} arguments but got {}.",
-                        function.arity(),
-                        args_size
-                    ),
-                })
-            } else {
-                function.call(self, &args)
+        match callee_value {
+            Object::Callable(function) => {
+                let args_size = args.len();
+                if args_size != function.arity() {
+                    Err(Error::Runtime {
+                        token: paren.clone(),
+                        message: format!(
+                            "Expected {} arguments but got {}.",
+                            function.arity(),
+                            args_size
+                        ),
+                    })
+                } else {
+                    function.call(self, &args)
+                }
             }
-        } else {
-            Err(Error::Runtime {
+            Object::Class(ref class) => {
+                // This is the call method of a class.
+                // let args_size = args.len();
+                let instance = LoxInstance::new(class);
+                // if let Some(initializer) = class.borrow().find_method("init") {
+                //     if args_size != initializer.arity() {
+                //         return Err(Error::Runtime {
+                //             token: paren.clone(),
+                //             message: format!(
+                //                 "Expected {} arguments but got {}.",
+                //                 initializer.arity(),
+                //                 args_size
+                //             ),
+                //         });
+                //     } else {
+                //         initializer.bind(instance.clone()).call(self, &args)?;
+                //     }
+                // }
+
+                Ok(instance)
+            }
+            _ => Err(Error::Runtime {
                 token: paren.clone(),
                 message: "Can only call functions and classes.".to_string(),
+            }),
+        }
+    }
+
+    // First, we evaluate the expression whose property is being accessed. In
+    // Lox, only instances of classes have properties. If the object is some
+    // other type like a number, invoking a getter on it is a runtime error.
+    fn visit_get_expr(&mut self, object: &Expr, name: &Token) -> Result<Object, Error> {
+        let object = self.evaluate(object)?;
+        if let Object::Instance(ref instance) = object {
+            instance.borrow().get(name, &object)
+        } else {
+            Err(Error::Runtime {
+                token: name.clone(),
+                message: "Only instances have properties.".to_string(),
+            })
+        }
+    }
+
+    // We evaluate the object whose property is being set and check to see if
+    // it’s a LoxInstance. If not, that’s a runtime error. Otherwise, we
+    // evaluate the value being set and store it on the instance.
+    fn visit_set_expr(
+        &mut self,
+        object: &Expr,
+        property_name: &Token,
+        value: &Expr,
+    ) -> Result<Object, Error> {
+        let object = self.evaluate(object)?;
+        if let Object::Instance(ref instance) = object {
+            let value = self.evaluate(value)?;
+            instance.borrow_mut().set(property_name, value);
+            let r = Object::Instance(Rc::clone(instance));
+            Ok(r)
+        } else {
+            Err(Error::Runtime {
+                token: property_name.clone(),
+                message: "Only instances have fields.".to_string(),
             })
         }
     }
