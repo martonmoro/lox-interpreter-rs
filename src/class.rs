@@ -3,12 +3,21 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::error::Error;
+use crate::function::Function;
 use crate::object::Object;
 use crate::token::Token;
 
+// The instance stores the state, the class stores the behaviour
 #[derive(Debug)]
 pub struct LoxClass {
     pub name: String,
+    pub methods: HashMap<String, Function>,
+}
+
+impl LoxClass {
+    fn find_method(&self, name: &str) -> Option<&Function> {
+        self.methods.get(name)
+    }
 }
 
 #[derive(Debug)]
@@ -33,6 +42,9 @@ impl LoxInstance {
     pub fn get(&self, name: &Token, instance: &Object) -> Result<Object, Error> {
         if let Some(field) = self.fields.get(&name.lexeme) {
             Ok(field.clone())
+        } else if let Some(method) = self.class.borrow().find_method(&name.lexeme) {
+            // Ok(Object::Callable(method.bind(instance.clone())))
+            Ok(Object::Callable(method.clone()))
         } else {
             Err(Error::Runtime {
                 token: name.clone(),

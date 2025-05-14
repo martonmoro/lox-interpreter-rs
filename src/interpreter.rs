@@ -403,20 +403,37 @@ impl stmt::Visitor<()> for Interpreter {
     // We circle back and store the class object in the variable we previously
     // declared. That two-stage variable binding process allows references to
     // the class inside its own methods.
-    fn visit_class_stmt(
-        &mut self,
-        class_name: &Token,
-        class_methods: &Vec<Stmt>,
-    ) -> Result<(), Error> {
+    fn visit_class_stmt(&mut self, class_name: &Token, methods: &Vec<Stmt>) -> Result<(), Error> {
         self.environment
             .borrow_mut()
             .define(class_name.lexeme.clone(), Object::Null);
 
+        // When we interpret a class declaration statement, we turn the
+        // syntactic representation of the class—its AST node—into its runtime
+        // representation. Now, we need to do that for the methods contained in
+        // the class as well. Each method declaration blossoms into a
+        // LoxFunction object.
+        let mut class_methods: HashMap<String, Function> = HashMap::new();
+        for method in methods {
+            if let Stmt::Function { name, params, body } = method {
+                let function = Function::User {
+                    name: name.clone(),
+                    params: params.clone(),
+                    body: body.clone(),
+                    closure: Rc::clone(&self.environment),
+                };
+                class_methods.insert(name.lexeme.clone(), function);
+            } else {
+                unreachable!()
+            }
+        }
+
         let lox_class = LoxClass {
             name: class_name.lexeme.clone(),
+            methods: class_methods,
         };
         let class = Object::Class(Rc::new(RefCell::new(lox_class)));
-        self.environment.borrow_mut().assign(class_name, class);
+        self.environment.borrow_mut().assign(class_name, class)?;
         Ok(())
     }
 
