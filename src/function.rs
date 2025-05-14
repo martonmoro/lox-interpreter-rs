@@ -1,4 +1,4 @@
-use crate::environment::Environment;
+use crate::environment::{self, Environment};
 use crate::error::Error;
 use crate::interpreter::{self, Interpreter};
 use crate::object::Object;
@@ -69,6 +69,34 @@ impl Function {
                     Err(Error::Return { value }) => Ok(value),
                     Err(other) => Err(other),
                     Ok(..) => Ok(Object::Null), // We don't have a return statement
+                }
+            }
+        }
+    }
+
+    // We create a new environment nestled inside the method’s original closure.
+    // Sort of a closure-within-a-closure. When the method is called, that will
+    // become the parent of the method body’s environment. We declare “this” as
+    // a variable in that environment and bind it to the given instance, the
+    // instance that the method is being accessed from.ß
+    pub fn bind(&self, instance: Object) -> Self {
+        match self {
+            Function::Native { .. } => unreachable!(),
+            Function::User {
+                name,
+                params,
+                body,
+                closure,
+            } => {
+                let environment = Rc::new(RefCell::new(Environment::from(closure)));
+                environment
+                    .borrow_mut()
+                    .define("this".to_string(), instance);
+                Function::User {
+                    name: name.clone(),
+                    params: params.clone(),
+                    body: body.clone(),
+                    closure: environment,
                 }
             }
         }

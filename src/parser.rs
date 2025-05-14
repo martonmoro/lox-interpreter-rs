@@ -529,6 +529,9 @@ impl<'t> Parser<'t> {
             TokenType::Identifier => Expr::Variable {
                 name: self.peek().clone(),
             },
+            TokenType::This => Expr::This {
+                keyword: self.peek().clone(),
+            },
             _ => return Err(self.error(self.peek(), "Expect expression")),
         };
 

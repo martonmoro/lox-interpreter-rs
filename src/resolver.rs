@@ -6,6 +6,7 @@ use crate::syntax::{Expr, LiteralValue, Stmt};
 use crate::token::Token;
 
 use std::collections::HashMap;
+use std::mem;
 
 // Much like we track scopes as we walk the tree, we can track whether or not
 // the code we are currently visiting is inside a function declaration.
@@ -35,6 +36,7 @@ pub struct Resolver<'i> {
     scopes: Vec<HashMap<String, bool>>,
 
     current_function: FunctionType,
+    current_class: ClassType,
 }
 
 impl<'i> Resolver<'i> {
@@ -43,6 +45,7 @@ impl<'i> Resolver<'i> {
             interpreter: interpreter,
             scopes: Vec::new(),
             current_function: FunctionType::None,
+            current_class: ClassType::None,
         }
     }
 
@@ -205,6 +208,15 @@ impl<'i> expr::Visitor<()> for Resolver<'i> {
         Ok(())
     }
 
+    fn visit_this_expr(&mut self, keyword: &Token) -> Result<(), Error> {
+        if let ClassType::None = self.current_class {
+            parser_error(keyword, "Cannot use 'this' outside of a class.");
+        } else {
+            self.resolve_local(keyword);
+        }
+        Ok(())
+    }
+
     // We walk the argument list and resolve them all. The thing being called is
     // also an expression (usually a variable expression), so that gets resolved
     // too.
@@ -259,9 +271,20 @@ impl<'i> stmt::Visitor<()> for Resolver<'i> {
         Ok(())
     }
 
+    // whenever a this expression is encountered (at least inside a method) it
+    // will resolve to a “local variable” defined in an implicit scope just
+    // outside of the block for the method body.
     fn visit_class_stmt(&mut self, name: &Token, methods: &Vec<Stmt>) -> Result<(), Error> {
+        let enclosing_class = mem::replace(&mut self.current_class, ClassType::Class);
+
         self.declare(name);
         self.define(name);
+
+        self.begin_scope();
+        self.scopes
+            .last_mut()
+            .expect("Scopes is empty")
+            .insert("this".to_owned(), true);
 
         for method in methods {
             if let Stmt::Function { name, params, body } = method {
@@ -271,6 +294,10 @@ impl<'i> stmt::Visitor<()> for Resolver<'i> {
                 unreachable!()
             }
         }
+        self.end_scope();
+
+        self.current_class = enclosing_class;
+
         Ok(())
     }
 

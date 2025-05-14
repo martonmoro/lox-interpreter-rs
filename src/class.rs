@@ -43,8 +43,7 @@ impl LoxInstance {
         if let Some(field) = self.fields.get(&name.lexeme) {
             Ok(field.clone())
         } else if let Some(method) = self.class.borrow().find_method(&name.lexeme) {
-            // Ok(Object::Callable(method.bind(instance.clone())))
-            Ok(Object::Callable(method.clone()))
+            Ok(Object::Callable(method.bind(instance.clone())))
         } else {
             Err(Error::Runtime {
                 token: name.clone(),

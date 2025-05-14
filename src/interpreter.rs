@@ -278,6 +278,10 @@ impl expr::Visitor<Object> for Interpreter {
         }
     }
 
+    fn visit_this_expr(&mut self, keyword: &Token) -> Result<Object, Error> {
+        self.look_up_variable(keyword)
+    }
+
     fn visit_binary_expr(
         &mut self,
         left: &Expr,

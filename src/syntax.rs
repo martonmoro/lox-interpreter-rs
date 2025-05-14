@@ -31,6 +31,9 @@ pub enum Expr {
         name: Token,
         value: Box<Expr>,
     },
+    This {
+        keyword: Token,
+    },
     Unary {
         operator: Token,
         right: Box<Expr>,
@@ -102,6 +105,7 @@ impl Expr {
                 name,
                 value,
             } => visitor.visit_set_expr(object, name, value),
+            Expr::This { keyword } => visitor.visit_this_expr(keyword),
             Expr::Grouping { expression } => visitor.visit_grouping_expr(expression),
             Expr::Literal { value } => visitor.visit_literal_expr(value),
             Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, right),
@@ -133,6 +137,7 @@ pub mod expr {
         fn visit_get_expr(&mut self, object: &Expr, name: &Token) -> Result<R, Error>;
         fn visit_set_expr(&mut self, object: &Expr, name: &Token, value: &Expr)
             -> Result<R, Error>;
+        fn visit_this_expr(&mut self, keyword: &Token) -> Result<R, Error>;
         fn visit_logical_expr(
             &mut self,
             left: &Expr,
@@ -279,6 +284,10 @@ impl expr::Visitor<String> for AstPrinter {
         value: &Expr,
     ) -> Result<String, Error> {
         self.parenthesize(name.lexeme.clone(), vec![object, value])
+    }
+
+    fn visit_this_expr(&mut self, keyword: &Token) -> Result<String, Error> {
+        Ok("this".to_string())
     }
 
     fn visit_get_expr(&mut self, object: &Expr, name: &Token) -> Result<String, Error> {
