@@ -202,8 +202,8 @@ cargo test
 - ✅ Block scoping
 - ✅ Functions
 - ✅ Resolving and Binding
-- 🔄 Classes (in progress)
-- 🔄 Inheritance
+- ✅ Classes
+- 🔄 Inheritance (in progress)
 
 ## Running Examples
 
