@@ -55,7 +55,8 @@ impl Environment {
 
         // Get next ancestor
         for i in 1..distance {
-            let parent = self
+            let parent = environment
+                .borrow()
                 .enclosing
                 .clone()
                 .expect(&format!("No enclosing environment at {}", i));

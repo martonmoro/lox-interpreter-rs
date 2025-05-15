@@ -15,7 +15,7 @@ pub struct LoxClass {
 }
 
 impl LoxClass {
-    fn find_method(&self, name: &str) -> Option<&Function> {
+    pub fn find_method(&self, name: &str) -> Option<&Function> {
         self.methods.get(name)
     }
 }

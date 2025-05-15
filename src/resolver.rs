@@ -14,6 +14,7 @@ use std::mem;
 enum FunctionType {
     None,
     Function,
+    Initializer,
     Method,
 }
 
@@ -283,17 +284,22 @@ impl<'i> stmt::Visitor<()> for Resolver<'i> {
         self.begin_scope();
         self.scopes
             .last_mut()
-            .expect("Scopes is empty")
+            .expect("Scopes is empty.")
             .insert("this".to_owned(), true);
 
         for method in methods {
             if let Stmt::Function { name, params, body } = method {
-                let declaration = FunctionType::Method;
+                let declaration = if name.lexeme == "init" {
+                    FunctionType::Initializer
+                } else {
+                    FunctionType::Method
+                };
                 self.resolve_function(params, body, declaration);
             } else {
                 unreachable!()
             }
         }
+
         self.end_scope();
 
         self.current_class = enclosing_class;
@@ -333,6 +339,9 @@ impl<'i> stmt::Visitor<()> for Resolver<'i> {
         }
 
         if let Some(return_value) = value {
+            if let FunctionType::Initializer = self.current_function {
+                parser_error(keyword, "Can't return a value from an initializer.");
+            }
             self.resolve_expr(return_value);
         }
         Ok(())
