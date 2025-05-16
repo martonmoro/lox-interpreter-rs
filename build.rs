@@ -30,5 +30,5 @@ fn main() {
             .build()
     )
     .unwrap();
-    write!(&mut file, ";\n").unwrap();
+    writeln!(&mut file, ";").unwrap(); // Fixed as suggested by clippy
 }
