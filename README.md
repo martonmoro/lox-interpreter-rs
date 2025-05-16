@@ -203,7 +203,7 @@ cargo test
 - ✅ Functions
 - ✅ Resolving and Binding
 - ✅ Classes
-- 🔄 Inheritance (in progress)
+- ✅ Inheritance
 
 ## Running Examples
 
