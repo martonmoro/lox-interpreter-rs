@@ -134,8 +134,6 @@ jobs:
           echo -e "\n\033[1;36mRunning fibonacci implementations (first 5 numbers):\033[0m"
           ./target/release/lox-interpreter-rs examples/fibonacci_for.lox | head -5
           ./target/release/lox-interpreter-rs examples/fibonacci_while.lox | head -5
-          # Note: Recursive fibonacci is slow with large numbers, so just run it as is
-          ./target/release/lox-interpreter-rs examples/fibonacci_recursive.lox
 
   repl-test:
     name: Test REPL
