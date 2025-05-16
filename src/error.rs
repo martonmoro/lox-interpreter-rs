@@ -10,24 +10,24 @@ pub fn error(line: i32, message: &str) {
 }
 
 pub fn report(line: i32, where_: &str, message: &str) {
-    eprintln!("[line {line}] Error{where_}: {message}");
-    //hadError = true;
+    eprintln!("[line {}] Error{}: {}", line, where_, message);
+    // had_error = true; TODO: Use custom Error type
 }
 
-pub fn parser_error(token: &Token, msg: &str) {
+pub fn parser_error(token: &Token, message: &str) {
     if token.token_type == TokenType::Eof {
-        report(token.line, " at end", msg);
+        report(token.line, " at end", message);
     } else {
-        report(token.line, &format!(" at '{}'", token.lexeme), msg);
+        report(token.line, &format!(" at '{}'", token.lexeme), message);
     }
 }
 
 #[derive(Debug)]
 pub enum Error {
+    Io(io::Error),
     Parse,
     Return { value: Object },
     Runtime { token: Token, message: String },
-    Io(io::Error),
 }
 
 impl fmt::Display for Error {

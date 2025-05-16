@@ -70,8 +70,9 @@ impl Lox {
         let mut resolver = Resolver::new(&mut self.interpreter);
         resolver.resolve_stmts(&statements);
 
-        // TODO: check for error and ret.
-        // if (hadError) return;
+        if resolver.had_error {
+            return Ok(());
+        }
 
         // We could go farther and report warnings for code that isn’t
         // necessarily wrong but probably isn’t useful. For example, many IDEs
