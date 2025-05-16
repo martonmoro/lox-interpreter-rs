@@ -89,6 +89,17 @@ jobs:
 
       - name: Run all example files
         run: |
+          # List all example files for visibility in logs
+          echo -e "\n\033[1;36mExample files to run:\033[0m"
+          ls -la examples/*.lox
+
+          # Count total examples for reporting
+          TOTAL_EXAMPLES=$(ls examples/*.lox | wc -l)
+          PASSED=0
+          FAILED=0
+
+          echo -e "\n\033[1;36mRunning $TOTAL_EXAMPLES example files:\033[0m"
+
           # Run all example files from the examples directory
           for file in examples/*.lox; do
             base_file=$(basename "$file")
@@ -101,39 +112,54 @@ jobs:
               if echo "$output" | grep -q "Cannot use 'super' in a class with no superclass"; then
                 echo -e "\033[1;32mValidation test passed: $file correctly produced the expected error\033[0m"
                 echo "$output"
+                PASSED=$((PASSED+1))
               else
                 echo -e "\033[1;31mValidation test failed: $file did not produce the expected error\033[0m"
                 echo "$output"
+                FAILED=$((FAILED+1))
                 exit 1
               fi
             else
               # Normal examples should run without errors
-              ./target/release/lox-interpreter-rs "$file" || {
-                echo -e "\033[1;31mError running $file\033[0m"
+              if ./target/release/lox-interpreter-rs "$file"; then
+                echo -e "\033[1;32mPassed: $file\033[0m"
+                PASSED=$((PASSED+1))
+              else
+                echo -e "\033[1;31mFailed: $file\033[0m"
+                FAILED=$((FAILED+1))
                 exit 1
-              }
+              fi
             fi
           done
 
-      - name: Run specific example combinations
+          echo -e "\n\033[1;36mExample test results: $PASSED passed, $FAILED failed (out of $TOTAL_EXAMPLES)\033[0m"
+
+      - name: Run focused example tests
         run: |
-          echo -e "\n\033[1;36mRunning OOP examples:\033[0m"
+          echo -e "\n\033[1;36mRunning examples by category for clearer output:\033[0m"
+
+          echo -e "\n\033[1;36m1. Class & OOP examples:\033[0m"
           ./target/release/lox-interpreter-rs examples/class.lox
           ./target/release/lox-interpreter-rs examples/this.lox
+          ./target/release/lox-interpreter-rs examples/eat_bacon.lox
           ./target/release/lox-interpreter-rs examples/inherit_method.lox
           ./target/release/lox-interpreter-rs examples/super_method.lox
+          ./target/release/lox-interpreter-rs examples/instance.lox
 
-          echo -e "\n\033[1;36mRunning closure examples:\033[0m"
+          echo -e "\n\033[1;36m2. Closure & scope examples:\033[0m"
           ./target/release/lox-interpreter-rs examples/make_counter.lox
           ./target/release/lox-interpreter-rs examples/global_block_closure_scope.lox
+          ./target/release/lox-interpreter-rs examples/scope.lox
 
-          echo -e "\n\033[1;36mRunning control flow examples:\033[0m"
+          echo -e "\n\033[1;36m3. Control flow examples:\033[0m"
           ./target/release/lox-interpreter-rs examples/branching.lox
           ./target/release/lox-interpreter-rs examples/logical.lox
 
-          echo -e "\n\033[1;36mRunning fibonacci implementations (first 5 numbers):\033[0m"
-          ./target/release/lox-interpreter-rs examples/fibonacci_for.lox | head -5
-          ./target/release/lox-interpreter-rs examples/fibonacci_while.lox | head -5
+          echo -e "\n\033[1;36m4. Fibonacci implementations (different kinds):\033[0m"
+          # Just run full fibonacci tests instead of truncating output with head
+          ./target/release/lox-interpreter-rs examples/fibonacci_for.lox
+          ./target/release/lox-interpreter-rs examples/fibonacci_while.lox
+          ./target/release/lox-interpreter-rs examples/fib_rec_while.lox
 
   repl-test:
     name: Test REPL
@@ -181,54 +207,3 @@ jobs:
 
           # Run the REPL with our test script
           cat repl_test.txt | ./target/release/lox-interpreter-rs
-
-  release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    needs: [test, run-examples, repl-test]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Build release binaries
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release
-
-      - name: Create artifacts directory
-        run: mkdir -p artifacts
-
-      - name: Copy binary and examples
-        run: |
-          cp target/release/lox-interpreter-rs artifacts/
-          cp -r examples artifacts/
-          cp README.md artifacts/
-          cp LICENSE artifacts/
-
-      - name: Create artifact archive
-        run: tar -czvf lox-interpreter-rs.tar.gz -C artifacts .
-
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: lox-interpreter-rs.tar.gz
-          tag_name: ${{ github.sha }}
-          name: Development Build ${{ github.sha }}
-          draft: false
-          prerelease: true
-          body: |
-            Development build of the Lox interpreter in Rust.
-
-            This build has passed all tests and example runs.
-
-            SHA: ${{ github.sha }}
-            Built on: ${{ github.event.repository.updated_at }}
