@@ -6,7 +6,7 @@ use crate::{error::Error, object::Object, token::Token};
 
 pub struct Environment {
     values: HashMap<String, Object>,
-    enclosing: Option<Rc<RefCell<Environment>>>, // Parent-pointer
+    pub enclosing: Option<Rc<RefCell<Environment>>>, // Parent-pointer
 }
 
 impl Environment {
@@ -69,21 +69,20 @@ impl Environment {
     // envrionments, scouring each one to see if the variable might be hiding in
     // there somewhere. But now we know exactly which environment in the chain
     // will have the variable.
-    pub fn get_at(&self, distance: usize, name: &Token) -> Result<Object, Error> {
-        let key = &*name.lexeme;
+    pub fn get_at(&self, distance: usize, name: &str) -> Result<Object, Error> {
         if distance > 0 {
             Ok(self
                 .ancestor(distance)
                 .borrow()
                 .values
-                .get(key)
-                .expect(&format!("Undefined variable '{}'", key))
+                .get(name)
+                .expect(&format!("Undefined variable '{}'", name))
                 .clone())
         } else {
             Ok(self
                 .values
-                .get(key)
-                .expect(&format!("Undefined variable '{}'", key))
+                .get(name)
+                .expect(&format!("Undefined variable '{}'", name))
                 .clone())
         }
     }

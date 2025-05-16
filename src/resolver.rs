@@ -1,5 +1,4 @@
 use crate::error::{parser_error, Error};
-use crate::function::Function;
 use crate::interpreter::Interpreter;
 use crate::syntax::{expr, stmt};
 use crate::syntax::{Expr, LiteralValue, Stmt};
@@ -22,6 +21,7 @@ enum FunctionType {
 enum ClassType {
     None,
     Class,
+    SubClass,
 }
 
 pub struct Resolver<'i> {
@@ -51,7 +51,7 @@ impl<'i> Resolver<'i> {
     }
 
     fn resolve_stmt(&mut self, statement: &Stmt) {
-        statement.accept(self);
+        let _ = statement.accept(self);
     }
 
     pub fn resolve_stmts(&mut self, statements: &Vec<Stmt>) {
@@ -61,7 +61,7 @@ impl<'i> Resolver<'i> {
     }
 
     fn resolve_expr(&mut self, expression: &Expr) {
-        expression.accept(self);
+        let _ = expression.accept(self);
     }
 
     // A new lexical scope is created
@@ -184,7 +184,7 @@ impl<'i> expr::Visitor<()> for Resolver<'i> {
     fn visit_binary_expr(
         &mut self,
         left: &Expr,
-        operator: &Token,
+        _operator: &Token,
         right: &Expr,
     ) -> Result<(), Error> {
         self.resolve_expr(left);
@@ -194,7 +194,7 @@ impl<'i> expr::Visitor<()> for Resolver<'i> {
 
     // During resolution, we recurse only into the expression to the left of the
     // dot. The actual property access happens in the interpreter.
-    fn visit_get_expr(&mut self, object: &Expr, name: &Token) -> Result<(), Error> {
+    fn visit_get_expr(&mut self, object: &Expr, _name: &Token) -> Result<(), Error> {
         self.resolve_expr(object);
         Ok(())
     }
@@ -203,9 +203,20 @@ impl<'i> expr::Visitor<()> for Resolver<'i> {
     // there’s nothing to resolve there. All we need to do is recurse into the
     // two subexpressions of Expr.Set, the object whose property is being set,
     // and the value it’s being set to.
-    fn visit_set_expr(&mut self, object: &Expr, name: &Token, value: &Expr) -> Result<(), Error> {
+    fn visit_set_expr(&mut self, object: &Expr, _name: &Token, value: &Expr) -> Result<(), Error> {
         self.resolve_expr(value);
         self.resolve_expr(object);
+        Ok(())
+    }
+
+    fn visit_super_expr(&mut self, keyword: &Token, _method: &Token) -> Result<(), Error> {
+        match self.current_class {
+            ClassType::None => parser_error(keyword, "Cannot use 'super' outside of a class."),
+            ClassType::Class => {
+                parser_error(keyword, "Cannot use 'super' in a class with no superclass.")
+            }
+            _ => self.resolve_local(keyword),
+        }
         Ok(())
     }
 
@@ -227,7 +238,7 @@ impl<'i> expr::Visitor<()> for Resolver<'i> {
     fn visit_call_expr(
         &mut self,
         callee: &Expr,
-        paren: &Token,
+        _paren: &Token,
         arguments: &Vec<Expr>,
     ) -> Result<(), Error> {
         self.resolve_expr(callee);
@@ -242,7 +253,7 @@ impl<'i> expr::Visitor<()> for Resolver<'i> {
         Ok(())
     }
 
-    fn visit_literal_expr(&self, value: &LiteralValue) -> Result<(), Error> {
+    fn visit_literal_expr(&self, _value: &LiteralValue) -> Result<(), Error> {
         Ok(())
     }
 
@@ -250,7 +261,7 @@ impl<'i> expr::Visitor<()> for Resolver<'i> {
     fn visit_logical_expr(
         &mut self,
         left: &Expr,
-        operator: &Token,
+        _operator: &Token,
         right: &Expr,
     ) -> Result<(), Error> {
         self.resolve_expr(left);
@@ -258,7 +269,7 @@ impl<'i> expr::Visitor<()> for Resolver<'i> {
         Ok(())
     }
 
-    fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> Result<(), Error> {
+    fn visit_unary_expr(&mut self, _operator: &Token, right: &Expr) -> Result<(), Error> {
         self.resolve_expr(right);
         Ok(())
     }
@@ -275,11 +286,34 @@ impl<'i> stmt::Visitor<()> for Resolver<'i> {
     // whenever a this expression is encountered (at least inside a method) it
     // will resolve to a “local variable” defined in an implicit scope just
     // outside of the block for the method body.
-    fn visit_class_stmt(&mut self, name: &Token, methods: &Vec<Stmt>) -> Result<(), Error> {
+    fn visit_class_stmt(
+        &mut self,
+        name: &Token,
+        superclass: &Option<Expr>,
+        methods: &Vec<Stmt>,
+    ) -> Result<(), Error> {
         let enclosing_class = mem::replace(&mut self.current_class, ClassType::Class);
 
         self.declare(name);
         self.define(name);
+
+        if let Some(Expr::Variable {
+            name: superclass_name,
+        }) = superclass
+        {
+            if name.lexeme == superclass_name.lexeme {
+                parser_error(superclass_name, "A class cannot inherit from itself.")
+            }
+
+            self.current_class = ClassType::SubClass;
+            self.resolve_local(superclass_name);
+
+            self.begin_scope();
+            self.scopes
+                .last_mut()
+                .expect("Scopes is empty.")
+                .insert("super".to_owned(), true);
+        }
 
         self.begin_scope();
         self.scopes
@@ -298,6 +332,10 @@ impl<'i> stmt::Visitor<()> for Resolver<'i> {
             } else {
                 unreachable!()
             }
+        }
+
+        if superclass.is_some() {
+            self.end_scope()
         }
 
         self.end_scope();

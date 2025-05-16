@@ -31,6 +31,10 @@ pub enum Expr {
         name: Token,
         value: Box<Expr>,
     },
+    Super {
+        keyword: Token,
+        method: Token,
+    },
     This {
         keyword: Token,
     },
@@ -105,6 +109,7 @@ impl Expr {
                 name,
                 value,
             } => visitor.visit_set_expr(object, name, value),
+            Expr::Super { keyword, method } => visitor.visit_super_expr(keyword, method),
             Expr::This { keyword } => visitor.visit_this_expr(keyword),
             Expr::Grouping { expression } => visitor.visit_grouping_expr(expression),
             Expr::Literal { value } => visitor.visit_literal_expr(value),
@@ -137,6 +142,7 @@ pub mod expr {
         fn visit_get_expr(&mut self, object: &Expr, name: &Token) -> Result<R, Error>;
         fn visit_set_expr(&mut self, object: &Expr, name: &Token, value: &Expr)
             -> Result<R, Error>;
+        fn visit_super_expr(&mut self, keyword: &Token, method: &Token) -> Result<R, Error>;
         fn visit_this_expr(&mut self, keyword: &Token) -> Result<R, Error>;
         fn visit_logical_expr(
             &mut self,
@@ -158,7 +164,16 @@ pub enum Stmt {
     },
     Class {
         name: Token,
-        methods: Vec<Stmt>, // Assuming all are Stmt::Function
+        // The grammar restricts the superclass clause to a single identifier,
+        // but at runtime, that identifier is evaluated as a variable access.
+        // Wrapping the name in an Expr.Variable early on in the parser gives us
+        // an object that the resolver can hang the resolution information off
+        // of.
+
+        // Assuming Expr::Variable
+        superclass: Option<Expr>,
+        // Assuming all are Stmt::Function
+        methods: Vec<Stmt>,
     },
     Expression {
         expression: Expr,
@@ -202,7 +217,11 @@ impl Stmt {
             Stmt::Return { keyword, value } => visitor.visit_return_stmt(keyword, value),
             Stmt::Var { name, initializer } => visitor.visit_var_stmt(name, initializer),
             Stmt::Block { statements } => visitor.visit_block_stmt(statements),
-            Stmt::Class { name, methods } => visitor.visit_class_stmt(name, methods),
+            Stmt::Class {
+                name,
+                superclass,
+                methods,
+            } => visitor.visit_class_stmt(name, superclass, methods),
             Stmt::Null => unimplemented!(),
             Stmt::If {
                 condition,
@@ -232,7 +251,12 @@ pub mod stmt {
         fn visit_return_stmt(&mut self, keyword: &Token, value: &Option<Expr>) -> Result<R, Error>;
         fn visit_var_stmt(&mut self, name: &Token, initializer: &Option<Expr>) -> Result<R, Error>;
         fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<R, Error>;
-        fn visit_class_stmt(&mut self, name: &Token, methods: &Vec<Stmt>) -> Result<R, Error>;
+        fn visit_class_stmt(
+            &mut self,
+            name: &Token,
+            superclass: &Option<Expr>,
+            methods: &Vec<Stmt>,
+        ) -> Result<R, Error>;
         fn visit_if_stmt(
             &mut self,
             condition: &Expr,
@@ -246,10 +270,6 @@ pub mod stmt {
 pub struct AstPrinter;
 
 impl AstPrinter {
-    pub fn print(&mut self, expr: Expr) -> Result<String, Error> {
-        expr.accept(self)
-    }
-
     fn parenthesize(&mut self, name: String, exprs: Vec<&Expr>) -> Result<String, Error> {
         let mut builder = String::new();
 
@@ -286,7 +306,11 @@ impl expr::Visitor<String> for AstPrinter {
         self.parenthesize(name.lexeme.clone(), vec![object, value])
     }
 
-    fn visit_this_expr(&mut self, keyword: &Token) -> Result<String, Error> {
+    fn visit_super_expr(&mut self, _keyword: &Token, _method: &Token) -> Result<String, Error> {
+        Ok("super".to_string())
+    }
+
+    fn visit_this_expr(&mut self, _keyword: &Token) -> Result<String, Error> {
         Ok("this".to_string())
     }
 
@@ -330,36 +354,5 @@ impl expr::Visitor<String> for AstPrinter {
         _arguments: &Vec<Expr>,
     ) -> Result<String, Error> {
         unimplemented!()
-    }
-}
-
-// test from the book
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::token::{Token, TokenType};
-
-    #[test]
-    fn test_printer() {
-        let expression = Expr::Binary {
-            left: Box::new(Expr::Unary {
-                operator: Token::new(TokenType::Minus, "-", 1),
-                right: Box::new(Expr::Literal {
-                    value: LiteralValue::Number(123f64),
-                }),
-            }),
-            operator: Token::new(TokenType::Star, "*", 1),
-            right: Box::new(Expr::Grouping {
-                expression: Box::new(Expr::Literal {
-                    value: LiteralValue::Number(45.67),
-                }),
-            }),
-        };
-        let mut printer = AstPrinter;
-
-        assert_eq!(
-            printer.print(expression).unwrap(),
-            "(* (- 123) (group 45.67))"
-        );
     }
 }

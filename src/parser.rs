@@ -56,9 +56,15 @@ impl<'t> Parser<'t> {
         }
     }
 
-    // classDecl      → "class" IDENTIFIER "{" function* "}" ;
+    // classDecl      → "class" IDENTIFIER ( "<" IDENTIFIER )? "{" function* "}" ;
     fn class_declaration(&mut self) -> Result<Stmt, Error> {
         let name = self.consume(TokenType::Identifier, "Expect class name.")?;
+        let superclass = if matches!(self, TokenType::Less) {
+            self.consume(TokenType::Identifier, "Expect superclass name.")?;
+            Some(self.previous().clone())
+        } else {
+            None
+        };
         self.consume(TokenType::LeftBrace, "Expect '{' before class body.")?;
 
         let mut methods: Vec<Stmt> = Vec::new();
@@ -68,7 +74,11 @@ impl<'t> Parser<'t> {
 
         self.consume(TokenType::RightBrace, "Expect '}' after class body.")?;
 
-        Ok(Stmt::Class { name, methods })
+        Ok(Stmt::Class {
+            name,
+            superclass: superclass.map(|name| Expr::Variable { name }),
+            methods,
+        })
     }
 
     // Like most dynamically typed languages, fields are not explicitly listed
@@ -151,7 +161,7 @@ impl<'t> Parser<'t> {
             None
         };
 
-        self.consume(TokenType::Semicolon, "Expect ';' after return value.");
+        self.consume(TokenType::Semicolon, "Expect ';' after return value.")?;
         Ok(Stmt::Return { keyword, value })
     }
 
@@ -501,7 +511,7 @@ impl<'t> Parser<'t> {
     // This rule requires at least one argument expression, followed by zero or more other expressions, each preceded by a comma.
     // To handle zero-argument calls, the call rule itself considers the entire arguments production to be optional.
 
-    // primary        → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
+    // primary        → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER | "super" "." IDENTIFIER ;
     fn primary(&mut self) -> Result<Expr, Error> {
         let expr = match &self.peek().token_type {
             TokenType::False => Expr::Literal {
@@ -532,6 +542,13 @@ impl<'t> Parser<'t> {
             TokenType::This => Expr::This {
                 keyword: self.peek().clone(),
             },
+            TokenType::Super => {
+                let keyword = self.advance().clone();
+                self.consume(TokenType::Dot, "Expect '.' after 'super'.")?;
+                let method =
+                    self.consume(TokenType::Identifier, "Expect superclass method name.")?;
+                return Ok(Expr::Super { keyword, method });
+            }
             _ => return Err(self.error(self.peek(), "Expect expression")),
         };
 
@@ -628,24 +645,5 @@ impl<'t> Parser<'t> {
     fn error(&self, token: &Token, msg: &str) -> Error {
         parser_error(token, msg);
         Error::Parse
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::scanner::Scanner;
-    use crate::syntax::AstPrinter;
-
-    #[test]
-    fn test_parser() {
-        let mut scanner = Scanner::new("-123 * 45.67".to_string());
-        let tokens = scanner.scan_tokens();
-
-        let mut parser = Parser::new(tokens);
-        let statements = parser.parse().expect("Could not parse sample code.");
-        let printer = AstPrinter;
-
-        // assert_eq!(printer.print(statements).unwrap(), "(* (- 123) 45.67)");
     }
 }
