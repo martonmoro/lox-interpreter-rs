@@ -1,7 +1,7 @@
-# Lox-rs: A Rust Implementation of the Lox Language
+# Lox-rs: A Complete Rust Implementation of the Lox Language
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Rust](https://img.shields.io/badge/rust-1.50%2B-orange.svg)
+![Rust](https://img.shields.io/badge/rust-stable-orange.svg)
 
 This project is a feature-complete interpreter for the Lox programming language, implemented in idiomatic Rust. Based on Robert Nystrom's book ["Crafting Interpreters"](https://craftinginterpreters.com/), this implementation leverages Rust's strengths to create a memory-safe, performant interpreter with clean, maintainable code.
 
@@ -15,6 +15,10 @@ This project is a feature-complete interpreter for the Lox programming language,
   - Dynamic typing system
   - Variables and assignment
   - Control flow (if/else, while, for loops)
+  - First-class functions with closures
+  - Classes with inheritance
+  - Method calls with `this` binding
+  - Superclass method access with `super`
   - Block scoping with lexical environments
   - Comprehensive error reporting
 
@@ -24,8 +28,28 @@ This project is a feature-complete interpreter for the Lox programming language,
   - Functional programming techniques
   - Advanced pattern matching
   - Zero-cost abstractions
+  - Smart pointers for managing object lifetimes
 
 ## Technical Highlights
+
+### Object System
+
+The interpreter implements a robust dynamic object system using Rust's enum types and smart pointers:
+
+```rust
+#[derive(Debug, Clone)]
+pub enum Object {
+    Boolean(bool),
+    Callable(Function),
+    Class(Rc<RefCell<LoxClass>>),
+    Instance(Rc<RefCell<LoxInstance>>),
+    Null,
+    Number(f64),
+    String(String),
+}
+```
+
+Classes and instances are managed with reference-counted cells (`Rc<RefCell<T>>`) to allow for shared ownership and interior mutability, essential for modeling object-oriented concepts in a memory-safe way.
 
 ### Memory Management
 
@@ -33,6 +57,7 @@ The environment uses a parent-pointer tree structure with `Rc<RefCell<T>>` for e
 
 - Proper scoping for variables
 - Clean handling of nested environments
+- Support for closures that capture their lexical environment
 - No need for manual memory management or GC
 
 ### Visitor Pattern Implementation
@@ -42,7 +67,7 @@ The interpreter implements the visitor pattern using Rust traits and generics, p
 ```rust
 impl expr::Visitor<Object> for Interpreter {
     fn visit_binary_expr(
-        &self,
+        &mut self,
         left: &Expr,
         operator: &Token,
         right: &Expr,
@@ -71,6 +96,23 @@ impl expr::Visitor<Object> for Interpreter {
 }
 ```
 
+### Lexical Resolution
+
+The implementation includes a static analysis pass before execution:
+
+```rust
+pub fn resolve(&mut self, name: &Token, depth: usize) {
+    self.locals.insert(name.clone(), depth);
+}
+```
+
+This resolution step:
+
+- Improves variable lookup performance
+- Ensures proper closure semantics
+- Detects errors like referencing a variable in its own initializer
+- Validates proper use of `this` and `super` references
+
 ### Error Handling
 
 Error propagation uses Rust's `Result` type with detailed error information, enabling:
@@ -78,6 +120,7 @@ Error propagation uses Rust's `Result` type with detailed error information, ena
 - Clear error messages with source line information
 - Proper error recovery in the parser
 - Graceful handling of runtime errors
+- Special handling for return statements via a custom Error variant
 
 ### Functional Programming Techniques
 
@@ -90,7 +133,7 @@ The codebase demonstrates functional programming techniques in Rust, such as:
 
 These approaches lead to more concise and robust code, reducing the likelihood of bugs while improving readability.
 
-### Project Structure
+## Project Structure
 
 - `main.rs` - Program entry point, REPL and file execution logic
 - `scanner.rs` - Lexical scanner that converts source code to tokens
@@ -99,7 +142,10 @@ These approaches lead to more concise and robust code, reducing the likelihood o
 - `syntax.rs` - AST node definitions and visitor implementation
 - `interpreter.rs` - Tree-walk interpreter for execution
 - `environment.rs` - Variable scope and environment handling
+- `resolver.rs` - Static analyzer for variable resolution
 - `object.rs` - Runtime value representations
+- `class.rs` - Class and instance implementations
+- `function.rs` - Function call mechanism and closures
 - `error.rs` - Error types and reporting
 - `build.rs` - Build-time code generation for keywords
 
@@ -116,54 +162,70 @@ print a + b; // Outputs: 3
 ### Control Flow
 
 ```lox
-// Calculate Fibonacci numbers
-var a = 0;
-var b = 1;
-
-for (var i = 0; i < 10; i = i + 1) {
-  print a;
-  var temp = a;
-  a = b;
-  b = temp + b;
-}
+var a = 1;
+if (a > 2)
+    print "Greater than two";
+else
+    print "Less than two";
 ```
 
-### Nested Scopes
+### Functions and Closures
 
 ```lox
-var a = "global";
-{
-  var b = "middle";
-  {
-    var c = "inner";
-    print a; // Prints: global
-    print b; // Prints: middle
-    print c; // Prints: inner
+fun makeCounter() {
+  var i = 0;
+  fun count() {
+    i = i + 1;
+    print i;
   }
-  print a; // Prints: global
-  print b; // Prints: middle
-  // print c; // Error: undefined variable
+
+  return count;
 }
+
+var counter = makeCounter();
+counter(); // "1".
+counter(); // "2".
 ```
 
-### Functions
+### Classes and Inheritance
 
 ```lox
-fun fib(n) {
-  if (n <= 1) return n;
-  return fib(n - 2) + fib(n - 1);
+class Doughnut {
+  cook() {
+    print "Fry until golden brown.";
+  }
 }
 
-for (var i = 0; i < 20; i = i + 1) {
-  print fib(i);
+class BostonCream < Doughnut {
+  cook() {
+    super.cook();
+    print "Pipe full of custard and coat with chocolate.";
+  }
 }
+
+BostonCream().cook();
+```
+
+### Methods and `this` Binding
+
+```lox
+class Cake {
+  taste() {
+    var adjective = "delicious";
+    print "The " + this.flavor + " cake is " + adjective + "!";
+  }
+}
+
+var cake = Cake();
+cake.flavor = "German chocolate";
+cake.taste(); // Prints "The German chocolate cake is delicious!".
 ```
 
 ## Building and Running
 
 ### Prerequisites
 
-- Rust 1.50 or higher
+- Rust stable or newer
 - Cargo
 
 ### Build
@@ -192,47 +254,45 @@ cargo run --release
 cargo test
 ```
 
-## Current Status
-
-- ✅ Lexical scanning
-- ✅ Expression parsing and evaluation
-- ✅ Statement execution
-- ✅ Variables and assignment
-- ✅ Control flow
-- ✅ Block scoping
-- ✅ Functions
-- ✅ Resolving and Binding
-- ✅ Classes
-- ✅ Inheritance
-
-## Running Examples
+## Examples Directory
 
 The repository includes several example Lox programs in the `examples/` directory:
 
 ```
 examples/
-├── assign.lox         - Basic variable declaration and assignment
-├── branching.lox      - If/else control flow
-├── fibonacci_for.lox  - Fibonacci sequence using for loops
-├── fibonacci_while.lox - Fibonacci sequence using while loops
-├── logical.lox        - Logical operators with short-circuit evaluation
-├── print.lox          - Basic printing of different types
-└── scope.lox          - Nested scope demonstration
+├── assign.lox                   - Basic variable declaration and assignment
+├── branching.lox                - If/else control flow
+├── class.lox                    - Comprehensive class example with methods and properties
+├── eat_bacon.lox                - Simple class with method call
+├── fibonacci_for.lox            - Fibonacci sequence using for loops
+├── fibonacci_recursive.lox      - Recursive Fibonacci implementation
+├── fibonacci_while.lox          - Fibonacci sequence using while loops
+├── global_block_closure_scope.lox - Demonstrates closure scope resolution
+├── incorrect_super.lox          - Example of invalid super usage (for error testing)
+├── inherit_method.lox           - Basic inheritance example
+├── instance.lox                 - Class instantiation example
+├── logical.lox                  - Logical operators with short-circuit evaluation
+├── make_counter.lox             - Closure example with counter function
+├── method.lox                   - Class method demonstration
+├── print.lox                    - Basic printing of different types
+├── scope.lox                    - Nested scope demonstration
+├── super_method.lox             - Superclass method access example
+└── this.lox                     - Demonstration of this binding in methods
 ```
 
 To run an example:
 
 ```bash
-cargo run -- examples/fibonacci_for.lox
+cargo run --release -- examples/class.lox
 ```
 
-Or directly with the binary:
+## Continuous Integration
 
-```bash
-./target/release/lox_interpreter_rs examples/fibonacci_for.lox
-```
+The project includes a GitHub Actions workflow that:
 
-The GitHub Actions workflow automatically runs all examples as part of CI to verify interpreter functionality.
+- Runs all tests
+- Builds the release binary
+- Executes the examples to verify interpreter functionality
 
 ## What I Learned
 
@@ -241,7 +301,7 @@ This project served as a dual learning experience, deepening my understanding of
 ### Rust Insights
 
 - **Ownership System**: Implementing environments and variable scoping required careful consideration of Rust's ownership rules
-- **Smart Pointers**: Using `Rc<RefCell<T>>` to create parent-pointer trees for lexical scoping
+- **Smart Pointers**: Using `Rc<RefCell<T>>` to create parent-pointer trees for lexical scoping and object representation
 - **Error Handling**: Leveraging Rust's Result type for robust error propagation throughout the interpreter
 - **Pattern Matching**: Applying exhaustive pattern matching for elegant handling of AST nodes and object types
 - **Traits and Generics**: Implementing the visitor pattern through Rust's trait system
@@ -255,8 +315,20 @@ This project served as a dual learning experience, deepening my understanding of
 - **Type Systems**: Runtime type checking and dynamic typing
 - **Evaluation Strategies**: Implementing proper order of operations and short-circuit evaluation
 - **Environments**: Creating a chain of environments for lexical variable lookup
+- **Closures**: Capturing lexical environment for first-class functions
+- **Classes and Inheritance**: Implementing an object system with method dispatch and inheritance
 - **Error Recovery**: Implementing synchronization points for error recovery in the parser
-- **Control Flow**: Implementing constructs like if/else, while, and for loops
+
+## Future Enhancements
+
+Possible extensions to this project:
+
+- Just-in-time compilation for performance improvement
+- Standard library implementation
+- Module system
+- Additional language features like arrays and maps
+- Static type checker
+- Bytecode VM implementation (similar to Part III of Crafting Interpreters)
 
 ## Acknowledgements
 
